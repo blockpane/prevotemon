@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/microcosm-cc/bluemonday"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/types"
 	"log"
@@ -43,13 +44,18 @@ type NewRound struct {
 }
 
 func Round(client *rpchttp.HTTP, rounds chan *NewRound) {
+	defer log.Println("Not watching rounds")
 	event, err := client.Subscribe(context.Background(), "pvmon-round", "tm.event = 'NewRound'")
 	if err != nil {
 		panic(err)
 	}
 
 	for e := range event {
-		v := e.Data.(types.EventDataNewRound)
+		v, ok := e.Data.(types.EventDataNewRound)
+		if !ok {
+			log.Println("could not parse round message")
+			continue
+		}
 		rounds <- &NewRound{
 			Height: v.Height,
 			Index:  v.Proposer.Index,
@@ -69,7 +75,7 @@ func Header(client *rpchttp.HTTP, last chan int64) {
 	}
 }
 
-func WatchPrevotes(rpc, rest string, updates chan []byte) {
+func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	type newRoundMsg struct {
 		Type         string `json:"type"`
 		Proposer     string `json:"proposer"`
@@ -85,11 +91,6 @@ func WatchPrevotes(rpc, rest string, updates chan []byte) {
 		Weight   float64 `json:"weight"`
 		OffsetMs int64   `json:"offset_ms"`
 		Height   int64   `json:"height"`
-	}
-
-	type pctMsg struct {
-		Height int64 `json:"height"`
-		Pct float64 `json:"pct"`
 	}
 
 	currentVals := make([]*Val, 0)
@@ -113,57 +114,57 @@ func WatchPrevotes(rpc, rest string, updates chan []byte) {
 	newRound := make(chan *NewRound)
 	var lastTS time.Time
 	var pct float64
-	go Round(client, newRound)
+	bm := bluemonday.StrictPolicy()
 	go func() {
 		for {
-			currentRound = <-newRound
-			lastTS = time.Now().UTC()
-			pct = 0
-			updates <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
-			//fmt.Println("starting new round:", currentRound.Height)
-			if int32(len(currentVals)) < currentRound.Index {
-				log.Println("not ready")
-				continue
+			select {
+			case currentRound = <-newRound:
+				lastTS = time.Now().UTC()
+				pct = 0
+				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
+				//fmt.Println("starting new round:", currentRound.Height)
+				if int32(len(currentVals)) < currentRound.Index {
+					log.Println("not ready")
+					continue
+				}
+				roundJson, e := json.Marshal(&newRoundMsg{
+					Type:         "round",
+					Proposer:     bm.Sanitize(currentVals[currentRound.Index].Moniker),
+					ProposerOper: currentVals[currentRound.Index].Valoper,
+					Height:       currentRound.Height,
+					TimeStamp:    lastTS.UTC().Unix(),
+				})
+				if e != nil {
+					log.Println(e)
+					continue
+				}
+				rounds <- roundJson
 			}
-			//if int32(len(currentVals)) >= currentRound.Index {
-			//	fmt.Println("new proposer:", currentVals[currentRound.Index].Moniker)
-			//}
-			j, e := json.Marshal(newRoundMsg{
-				Type:         "round",
-				Proposer:     currentVals[currentRound.Index].Moniker,
-				ProposerOper: currentVals[currentRound.Index].Valoper,
-				Height:       currentRound.Height,
-				TimeStamp:    lastTS.UTC().Unix(),
-			})
-			if e != nil {
-				log.Println(e)
-				continue
-			}
-			updates <- j
 		}
 	}()
+	go Round(client, newRound)
 
 	var lastHeight int64
 	headerHeight := make(chan int64)
-	go Header(client, headerHeight)
 	go func() {
 		for {
 			lastHeight = <-headerHeight
 		}
 	}()
-
-	votes := make(chan *VoteState)
-	go Votes(client, votes)
+	go Header(client, headerHeight)
 
 	go func() {
 		for {
-			time.Sleep(time.Second)
+			time.Sleep(500*time.Millisecond)
 			if pct > 100 {
 				continue
 			}
-			updates <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
+			progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
 		}
 	}()
+
+	votes := make(chan *VoteState)
+	go Votes(client, votes)
 
 	for v := range votes {
 		if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {

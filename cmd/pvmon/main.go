@@ -12,18 +12,17 @@ import (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	rpc := "tcp://10.254.254.9:26657"
-	rest := "http://10.254.254.9:1317"
-	listen := 8080
+	var vCast broadcast.Broadcaster
+	defer vCast.Discard()
 
-	updates := make(chan []byte)
+	var rCast broadcast.Broadcaster
+	defer rCast.Discard()
 
-	go pvm.WatchPrevotes(rpc, rest, updates)
+	var pCast broadcast.Broadcaster
+	defer pCast.Discard()
 
-	b := make([]byte, 0)
-	var cast broadcast.Broadcaster
-	defer cast.Discard()
 	var upgrader = websocket.Upgrader{}
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
 	broadcaster := func(writer http.ResponseWriter, request *http.Request, b *broadcast.Broadcaster) {
 		c, err := upgrader.Upgrade(writer, request, nil)
@@ -39,26 +38,52 @@ func main() {
 		}
 	}
 
+	http.Handle("/js/", http.FileServer(http.FS(pvm.StaticContent)))
+	http.Handle("/img/", &CacheHandler{})
+	http.Handle("/css/", http.FileServer(http.FS(pvm.StaticContent)))
+
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		// sockets
+		case "/rounds/ws":
+			broadcaster(writer, request, &rCast)
 		case "/prevote/ws":
-			broadcaster(writer, request, &cast)
+			broadcaster(writer, request, &vCast)
+		case "/progress/ws":
+			broadcaster(writer, request, &pCast)
 		default:
 			writer.WriteHeader(http.StatusNotFound)
+		// static
+		case "/", "/index.html":
+			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = writer.Write(pvm.IndexHtml)
 		}
 	})
 
+	updates := make(chan []byte)
+	rounds := make(chan []byte)
+	progress := make(chan []byte)
 	go func() {
 		for {
-			b = <-updates
-			//fmt.Println(string(b))
-			e := cast.Send(b)
-			if e != nil {
-				_ = log.Output(2, e.Error())
+			select {
+			case u := <-updates:
+				_ = vCast.Send(u)
+			case p := <-progress:
+				_ = pCast.Send(p)
+			case r := <-rounds:
+				_ = rCast.Send(r)
 			}
 		}
 	}()
+	go pvm.WatchPrevotes(pvm.Rpc, pvm.Rest, rounds, updates, progress)
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", listen), nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", pvm.Listen), nil))
+}
+
+// CacheHandler implements the Handler interface with a very long Cache-Control set on responses
+type CacheHandler struct{}
+
+func (ch CacheHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Cache-Control", "public, max-age=86400")
+	http.FileServer(http.FS(pvm.StaticContent)).ServeHTTP(writer, request)
 }

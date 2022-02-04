@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <script src="js/echarts.min.js"></script>
+  <script src="js/echarts-gl.min.js"></script>
+  <link rel="icon" href="/img/favicon.png">
+</head>
+<body onload="showSummary()">
+<div class="container-xl border-bottom border-info" style="padding-top: 20px;">
+  <div class="row" style="padding-bottom: 10px;">
+    <!--div class="col-4">
+      <h3><span id="networkId" class="text-capitalize"></span> Monitor</h3>
+    </div>
+    <div class="col-4 d-flex justify-content-center btn-group btn-group-sm">
+      <a href="/index.html"><button class="btn btn-secondary btn-sm">Overview</button></a>&nbsp;
+      <a href="/missed.html"><button class="btn btn-secondary btn-sm">Missed Blocks</button></a>&nbsp;
+      <a href="/network.html"><button class="btn btn-secondary btn-sm">Network</button></a>&nbsp;
+      <a href="/"><button class="btn btn-info btn-sm">Prevotes</button></a>&nbsp;
+    </div-->
+  </div>
+
+  <div class="row text-center">
+    <div class="col-12">
+    <div class="container" style="padding-bottom: 10px;">
+      <div class="row">
+        <div class="col-3 text-lg-center h5">Pre-Vote Status</div>
+        <div class="col-6">
+          <div class="row">
+            <div class="col text-lg-end">Block:</div>
+            <div class="col text-lg-start">Proposer</div>
+          </div>
+          <div class="row">
+            <div class="col text-lg-end h5" id="blocknum"></div>
+            <div class="col text-lg-start h5" id="proposer"></div>
+          </div>
+        </div>
+        <div class="col-3" id="percent" style="width: 250px; height: 250px;"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+  <div class="row">
+    <!-- div class="col-2" id="percent" style="height: 800px; width: 300px;"></div-->
+    <div class="col-12" id="votes" style="height: 800px;"></div>
+  </div>
+  <div class="row" style="padding-top: 30px;">
+    <p align="center">
+      <a href="https://blockpane.com"><img src="img/bp-logo-text.svg" height="30" alt="© 2021 Block Pane LLC."></a>&nbsp;
+      <a href="https://github.com/blockpane/prevotemon"><img src="img/GitHub-Mark.png" height="30"></a>
+    </p>
+  </div>
+</div>
+<script src="js/summary.js"></script>
+<script src="js/txcounts.js"></script>
+<script type="text/javascript">
+    function showSummary(){
+        chartPrevotes();
+    }
+</script>
+
+<script src="js/prevotes.js"></script>
+<script src="js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
