@@ -19,6 +19,10 @@ var IndexHtml []byte
 var StaticContent embed.FS
 
 func init() {
+	State = &CurrentState{
+		PreVotes: make([]*PreVoteMsg, 0),
+	}
+
 	flag.StringVar(&Rpc, "rpc", "tcp://127.0.0.1:26657", "Tendermint server's RPC port")
 	flag.StringVar(&Rest, "rest", "http://127.0.0.1:1317", "Tendermint server's Rest endpoint")
 	flag.IntVar(&Listen, "p", 8080, "HTTP port to listen on")

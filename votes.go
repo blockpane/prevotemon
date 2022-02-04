@@ -3,7 +3,6 @@ package pvm
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/microcosm-cc/bluemonday"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/types"
@@ -96,23 +95,38 @@ func Header(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
 	}
 }
 
-func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
-	type newRoundMsg struct {
-		Type         string `json:"type"`
-		Proposer     string `json:"proposer"`
-		ProposerOper string `json:"proposer_oper"`
-		Height       int64  `json:"height"`
-		TimeStamp    int64  `json:"time_stamp"`
-	}
+type NewRoundMsg struct {
+	Type         string `json:"type"`
+	Proposer     string `json:"proposer"`
+	ProposerOper string `json:"proposer_oper"`
+	Height       int64  `json:"height"`
+	TimeStamp    int64  `json:"time_stamp"`
+}
 
-	type preVoteMsg struct {
-		Type     string  `json:"type"`
-		Moniker  string  `json:"moniker"`
-		ValOper  string  `json:"valoper"`
-		Weight   float64 `json:"weight"`
-		OffsetMs int64   `json:"offset_ms"`
-		Height   int64   `json:"height"`
-	}
+type PreVoteMsg struct {
+	Type     string  `json:"type"`
+	Moniker  string  `json:"moniker"`
+	ValOper  string  `json:"valoper"`
+	Weight   float64 `json:"weight"`
+	OffsetMs int64   `json:"offset_ms"`
+	Height   int64   `json:"height"`
+}
+
+type ProgressMsg struct {
+	Type string `json:"type"`
+	Pct float64 `json:"pct"`
+	TimeStamp int64 `json:"time_stamp"`
+}
+
+type CurrentState struct {
+	Round *NewRoundMsg `json:"round"`
+	PreVotes []*PreVoteMsg `json:"pre_votes"`
+	Progress *ProgressMsg
+}
+
+var State *CurrentState
+
+func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 
 	abort, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -155,19 +169,27 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 			case currentRound = <-newRound:
 				lastTS = time.Now().UTC()
 				pct = 0
-				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
-				//fmt.Println("starting new round:", currentRound.Height)
+				State.PreVotes = make([]*PreVoteMsg, 0)
+				State.Progress = &ProgressMsg{
+					Type:      "pct",
+					Pct:       0,
+					TimeStamp: time.Now().UTC().Unix(),
+				}
+				if pJson, e := json.Marshal(State.Progress); e == nil {
+					progress <- pJson
+				}
 				if int32(len(currentVals)) < currentRound.Index || currentVals == nil {
 					log.Println("not ready")
 					continue
 				}
-				roundJson, e := json.Marshal(&newRoundMsg{
+				State.Round = &NewRoundMsg{
 					Type:         "round",
 					Proposer:     bm.Sanitize(currentVals[currentRound.Index].Moniker),
 					ProposerOper: currentVals[currentRound.Index].Valoper,
 					Height:       currentRound.Height,
 					TimeStamp:    lastTS.UTC().Unix(),
-				})
+				}
+				roundJson, e := json.Marshal(State.Round)
 				if e != nil {
 					log.Println(e)
 					continue
@@ -203,7 +225,14 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				if pct > 100 {
 					continue
 				}
-				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
+				State.Progress = &ProgressMsg{
+					Type:      "pct",
+					Pct:       math.Round(pct * 100)/100,
+					TimeStamp: time.Now().UTC().Unix(),
+				}
+				if pJson, e := json.Marshal(State.Progress); e == nil {
+					progress <- pJson
+				}
 			case <-abort.Done():
 				return
 			}
@@ -223,14 +252,16 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				continue
 			}
 			//fmt.Printf("%60s: %3.2f%% %s\n", currentVals[int(v.Index)].Moniker, 100*currentVals[int(v.Index)].Weight, v.Time.Sub(lastTS).String())
-			j, e := json.Marshal(preVoteMsg{
+			newVote := &PreVoteMsg{
 				Type:     "prevote",
 				Moniker:  currentVals[int(v.Index)].Moniker,
 				ValOper:  currentVals[int(v.Index)].Valoper,
 				Weight:   float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000, // three digits of precision, rounded down.
 				OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
 				Height:   v.Height,
-			})
+			}
+			State.PreVotes = append(State.PreVotes, newVote)
+			j, e := json.Marshal(newVote)
 			pct += float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000
 			if e != nil {
 				log.Println(e)

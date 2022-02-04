@@ -1,4 +1,27 @@
-function chartPrevotes() {
+async function chartPrevotes() {
+
+    const response = await fetch("/state", {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-cache',
+        credentials: 'same-origin',
+        redirect: 'error',
+        referrerPolicy: 'no-referrer'
+    });
+    let initialState = await response.json()
+
+    let initialVotes = []
+    for (const v of initialState.pre_votes) {
+        let size = v.weight*15^2
+        if (size < 15) {
+            size = 15
+        }
+        initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+    }
+    console.log(initialVotes)
+    document.getElementById('blocknum').innerText = initialState.round.height
+    document.getElementById('proposer').innerText = initialState.round.proposer
+
     let pctChartDom = document.getElementById('percent');
     let pctChart = echarts.init(pctChartDom);
     let pctOption;
@@ -85,7 +108,6 @@ function chartPrevotes() {
     let myChart = echarts.init(chartDom);
     let option;
 
-    let data = [[]]
     let dedup = {}
     option = {
         backgroundColor: "transparent",
@@ -117,7 +139,7 @@ function chartPrevotes() {
         series: [
             {
                 name: 'votes',
-                data: data,
+                data: initialVotes,
                 type: 'scatter',
                 symbol: "circle",
                 symbolSize: function (data) {

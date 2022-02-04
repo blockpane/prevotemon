@@ -4,6 +4,7 @@ import (
 	"fmt"
 	pvm "github.com/blockpane/prevotemon"
 	"github.com/gorilla/websocket"
+	"github.com/tendermint/tendermint/libs/json"
 	"github.com/textileio/go-threads/broadcast"
 	"log"
 	"net/http"
@@ -58,6 +59,10 @@ func main() {
 		case "/", "/index.html":
 			writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = writer.Write(pvm.IndexHtml)
+		case "/state":
+			writer.Header().Set("Content-Type", "application/json")
+			j, _ := json.MarshalIndent(pvm.State, "", "  ")
+			_, _ = writer.Write(j)
 		}
 	})
 
