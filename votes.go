@@ -19,22 +19,28 @@ type VoteState struct {
 	Height int64
 }
 
-func Votes(client *rpchttp.HTTP, state chan *VoteState) {
-	event, err := client.Subscribe(context.Background(), "pvmon-votes", "tm.event = 'Vote'")
+func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState) {
+	event, err := client.Subscribe(ctx, "pvmon-votes", "tm.event = 'Vote'")
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	defer client.Unsubscribe(context.Background(), "pvmon-votes", "tm.event = 'Vote'")
 
-	for e := range event {
-		v := e.Data.(types.EventDataVote).Vote
-		if v.Type == 1 {
-			state <- &VoteState{
-				Index: v.ValidatorIndex,
-				Type:  v.Type.String(),
-				Time:  v.Timestamp,
-				Height: v.Height,
+	for {
+		select {
+		case e := <-event:
+			v := e.Data.(types.EventDataVote).Vote
+			if v.Type == 1 {
+				state <- &VoteState{
+					Index: v.ValidatorIndex,
+					Type:  v.Type.String(),
+					Time:  v.Timestamp,
+					Height: v.Height,
+				}
 			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -44,37 +50,49 @@ type NewRound struct {
 	Index  int32
 }
 
-func Round(client *rpchttp.HTTP, rounds chan *NewRound) {
+func Round(ctx context.Context, client *rpchttp.HTTP, rounds chan *NewRound) {
 	defer log.Println("Not watching rounds")
-	event, err := client.Subscribe(context.Background(), "pvmon-round", "tm.event = 'NewRound'")
+	event, err := client.Subscribe(ctx, "pvmon-round", "tm.event = 'NewRound'")
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	defer client.Unsubscribe(context.Background(), "pvmon-round", "tm.event = 'NewRound'")
 
-	for e := range event {
-		v, ok := e.Data.(types.EventDataNewRound)
-		if !ok {
-			log.Println("could not parse round message")
-			continue
-		}
-		rounds <- &NewRound{
-			Height: v.Height,
-			Index:  v.Proposer.Index,
+	for {
+		select {
+		case e := <-event:
+			v, ok := e.Data.(types.EventDataNewRound)
+			if !ok {
+				log.Println("could not parse round message")
+				continue
+			}
+			rounds <- &NewRound{
+				Height: v.Height,
+				Index:  v.Proposer.Index,
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
-func Header(client *rpchttp.HTTP, last chan int64) {
-	event, err := client.Subscribe(context.Background(), "pvmon-header", "tm.event = 'NewBlockHeader'")
+func Header(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
+	event, err := client.Subscribe(ctx, "pvmon-header", "tm.event = 'NewBlockHeader'")
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	defer client.Unsubscribe(context.Background(),"pvmon-header", "tm.event = 'NewBlockHeader'")
 
-	for e := range event {
-		v := e.Data.(types.EventDataNewBlockHeader)
-		last <- v.Header.Height
+	for {
+		select {
+		case e := <-event:
+			v := e.Data.(types.EventDataNewBlockHeader)
+			last <- v.Header.Height
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -96,7 +114,8 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		Height   int64   `json:"height"`
 	}
 
-	abort := make(chan interface{}, 1)
+	abort, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	currentVals := make([]*Val, 0)
 	valUpdates := make(chan []*Val)
@@ -104,15 +123,15 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		for {
 			select {
 			case currentVals = <-valUpdates:
-			case <-abort:
+			case <-abort.Done():
 				return
 			}
 
 		}
 	}()
 	go func(){
-		Vals(rest, valUpdates)
-		close(abort)
+		Vals(abort, rest, valUpdates)
+		cancel()
 	}()
 
 	time.Sleep(6 * time.Second) // ensure we have a valset before continuing, lazy lazy using sleep :P
@@ -138,7 +157,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				pct = 0
 				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
 				//fmt.Println("starting new round:", currentRound.Height)
-				if int32(len(currentVals)) < currentRound.Index {
+				if int32(len(currentVals)) < currentRound.Index || currentVals == nil {
 					log.Println("not ready")
 					continue
 				}
@@ -154,14 +173,14 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					continue
 				}
 				rounds <- roundJson
-			case <-abort:
+			case <-abort.Done():
 				return
 			}
 		}
 	}()
 	go func() {
-		Round(client, newRound)
-		close(abort)
+		Round(abort, client, newRound)
+		cancel()
 	}()
 
 	var lastHeight int64
@@ -172,8 +191,8 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		}
 	}()
 	go func(){
-		Header(client, headerHeight)
-		close(abort)
+		Header(abort, client, headerHeight)
+		cancel()
 	}()
 
 	go func() {
@@ -185,7 +204,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					continue
 				}
 				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
-			case <-abort:
+			case <-abort.Done():
 				return
 			}
 		}
@@ -193,8 +212,8 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 
 	votes := make(chan *VoteState)
 	go func(){
-		Votes(client, votes)
-		close(abort)
+		Votes(abort, client, votes)
+		cancel()
 	}()
 
 	for {
@@ -218,7 +237,8 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				continue
 			}
 			updates <- j
-		case <-abort:
+		case <-abort.Done():
+			cancel()
 			return
 		}
 	}
