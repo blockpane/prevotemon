@@ -200,7 +200,7 @@ async function chartPrevotes() {
             const updVote = JSON.parse(event.data);
             if (updVote.type === "round") {
                 //console.log(updVote)
-                option.series[0].data = []
+                initialVotes = []
                 dedup = {}
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
@@ -236,6 +236,16 @@ async function chartPrevotes() {
     }
     connectProgress()
 
+    let lastSize = 0
+    setInterval(update, 100);
+    function update() {
+        if (lastSize !== initialVotes.length) {
+            lastSize = initialVotes.length
+            option.series[0].data = initialVotes
+            myChart.setOption(option)
+        }
+    }
+
     function connectVotes() {
         const socket = new WebSocket(wsProto + location.host + '/prevote/ws');
         socket.addEventListener('message', function (event) {
@@ -246,8 +256,7 @@ async function chartPrevotes() {
                 if (size < 15) {
                     size = 15
                 }
-                option.series[0].data.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
-                myChart.setOption(option)
+                initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
             }
         });
         socket.onclose = function(e) {
