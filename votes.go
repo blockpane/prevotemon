@@ -22,7 +22,8 @@ type VoteState struct {
 func Votes(client *rpchttp.HTTP, state chan *VoteState) {
 	event, err := client.Subscribe(context.Background(), "pvmon-votes", "tm.event = 'Vote'")
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 
 	for e := range event {
@@ -47,7 +48,8 @@ func Round(client *rpchttp.HTTP, rounds chan *NewRound) {
 	defer log.Println("Not watching rounds")
 	event, err := client.Subscribe(context.Background(), "pvmon-round", "tm.event = 'NewRound'")
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 
 	for e := range event {
@@ -66,7 +68,8 @@ func Round(client *rpchttp.HTTP, rounds chan *NewRound) {
 func Header(client *rpchttp.HTTP, last chan int64) {
 	event, err := client.Subscribe(context.Background(), "pvmon-header", "tm.event = 'NewBlockHeader'")
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 
 	for e := range event {
@@ -93,20 +96,32 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		Height   int64   `json:"height"`
 	}
 
+	abort := make(chan interface{}, 1)
+
 	currentVals := make([]*Val, 0)
 	valUpdates := make(chan []*Val)
-	go Vals(rest, valUpdates)
 	go func() {
 		for {
-			currentVals = <-valUpdates
+			select {
+			case currentVals = <-valUpdates:
+			case <-abort:
+				return
+			}
+
 		}
 	}()
+	go func(){
+		Vals(rest, valUpdates)
+		close(abort)
+	}()
+
 	time.Sleep(6 * time.Second) // ensure we have a valset before continuing, lazy lazy using sleep :P
 
 	client, _ := rpchttp.New(rpc, "/websocket")
 	err := client.Start()
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
 	defer client.Stop()
 
@@ -139,10 +154,15 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					continue
 				}
 				rounds <- roundJson
+			case <-abort:
+				return
 			}
 		}
 	}()
-	go Round(client, newRound)
+	go func() {
+		Round(client, newRound)
+		close(abort)
+	}()
 
 	var lastHeight int64
 	headerHeight := make(chan int64)
@@ -151,39 +171,56 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 			lastHeight = <-headerHeight
 		}
 	}()
-	go Header(client, headerHeight)
+	go func(){
+		Header(client, headerHeight)
+		close(abort)
+	}()
 
 	go func() {
+		tick := time.NewTicker(500*time.Millisecond)
 		for {
-			time.Sleep(500*time.Millisecond)
-			if pct > 100 {
-				continue
+			select {
+			case <-tick.C:
+				if pct > 100 {
+					continue
+				}
+				progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
+			case <-abort:
+				return
 			}
-			progress <- []byte(fmt.Sprintf(`{"type": "pct", "pct": %.2f, "time_stamp": %d}`, pct, time.Now().UTC().Unix()))
 		}
 	}()
 
 	votes := make(chan *VoteState)
-	go Votes(client, votes)
+	go func(){
+		Votes(client, votes)
+		close(abort)
+	}()
 
-	for v := range votes {
-		if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {
-			continue
+	for {
+		select {
+		case v := <-votes:
+			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {
+				continue
+			}
+			//fmt.Printf("%60s: %3.2f%% %s\n", currentVals[int(v.Index)].Moniker, 100*currentVals[int(v.Index)].Weight, v.Time.Sub(lastTS).String())
+			j, e := json.Marshal(preVoteMsg{
+				Type:     "prevote",
+				Moniker:  currentVals[int(v.Index)].Moniker,
+				ValOper:  currentVals[int(v.Index)].Valoper,
+				Weight:   float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000, // three digits of precision, rounded down.
+				OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
+				Height:   v.Height,
+			})
+			pct += float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000
+			if e != nil {
+				log.Println(e)
+				continue
+			}
+			updates <- j
+		case <-abort:
+			return
 		}
-		//fmt.Printf("%60s: %3.2f%% %s\n", currentVals[int(v.Index)].Moniker, 100*currentVals[int(v.Index)].Weight, v.Time.Sub(lastTS).String())
-		j, e := json.Marshal(preVoteMsg{
-			Type:     "prevote",
-			Moniker:  currentVals[int(v.Index)].Moniker,
-			ValOper:  currentVals[int(v.Index)].Valoper,
-			Weight:   float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000, // three digits of precision, rounded down.
-			OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
-			Height:   v.Height,
-		})
-		pct += float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000
-		if e != nil {
-			log.Println(e)
-			continue
-		}
-		updates <- j
 	}
+
 }

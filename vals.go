@@ -31,28 +31,35 @@ type TrimmedVal struct {
 
 func Vals(rest string, vals chan []*Val) {
 	tick := time.NewTicker(6 * time.Second)
+	var failed bool
 	for range tick.C {
 		func() {
 			resp, err := http.Get(rest + "/cosmos/staking/v1beta1/validators?pagination.limit=200")
 			if err != nil {
 				log.Println(err)
+				failed = true
 				return
 			}
 			defer resp.Body.Close()
 			b, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
 				log.Println(err)
+				failed = true
 				return
 			}
 			valset := &TrimmedVal{}
 			err = json.Unmarshal(b, valset)
 			if err != nil {
 				log.Println(err)
+				failed = true
 				return
 			}
 			updated := make([]*Val, 0)
 			totalVotes := new(big.Float)
 			for _, v := range valset.Validators {
+				if failed {
+					return
+				}
 				if v.Jailed || v.Status != "BOND_STATUS_BONDED" {
 					continue
 				}
@@ -83,5 +90,8 @@ func Vals(rest string, vals chan []*Val) {
 			})
 			vals <- updated
 		}()
+		if failed {
+			return
+		}
 	}
 }

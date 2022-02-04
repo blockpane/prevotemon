@@ -7,6 +7,7 @@ import (
 	"github.com/textileio/go-threads/broadcast"
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -75,7 +76,13 @@ func main() {
 			}
 		}
 	}()
-	go pvm.WatchPrevotes(pvm.Rpc, pvm.Rest, rounds, updates, progress)
+	go func() {
+		for {
+			pvm.WatchPrevotes(pvm.Rpc, pvm.Rest, rounds, updates, progress)
+			log.Println("watch prevote routine exited, will retry in 5s")
+			time.Sleep(5*time.Second)
+		}
+	}()
 
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", pvm.Listen), nil))
 }
