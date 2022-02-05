@@ -3,22 +3,18 @@ package pvm
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/tendermint/tendermint/libs/sync"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/types"
 	"log"
 	"math"
-	"strconv"
-	"strings"
 	"time"
 )
 
 type VoteState struct {
-	Index  int32
-	Type   string
-	Time   time.Time
+	Index int32
+	Type  string
+	Time  time.Time
 	Height int64
 }
 
@@ -36,9 +32,9 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState) {
 			v := e.Data.(types.EventDataVote).Vote
 			if v.Type == 1 {
 				state <- &VoteState{
-					Index:  v.ValidatorIndex,
-					Type:   v.Type.String(),
-					Time:   v.Timestamp,
+					Index: v.ValidatorIndex,
+					Type:  v.Type.String(),
+					Time:  v.Timestamp,
 					Height: v.Height,
 				}
 			}
@@ -154,15 +150,15 @@ type PreVoteMsg struct {
 }
 
 type ProgressMsg struct {
-	Type      string  `json:"type"`
-	Pct       float64 `json:"pct"`
-	TimeStamp int64   `json:"time_stamp"`
+	Type string `json:"type"`
+	Pct float64 `json:"pct"`
+	TimeStamp int64 `json:"time_stamp"`
 }
 
 type CurrentState struct {
-	Round    *NewRoundMsg  `json:"round"`
+	Round *NewRoundMsg `json:"round"`
 	PreVotes []*PreVoteMsg `json:"pre_votes"`
-	Progress *ProgressMsg  `json:"progress"`
+	Progress *ProgressMsg `json:"progress"`
 }
 
 var State *CurrentState
@@ -184,7 +180,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 
 		}
 	}()
-	go func() {
+	go func(){
 		Vals(abort, rest, valUpdates)
 		cancel()
 	}()
@@ -223,7 +219,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					Pct:       0,
 					TimeStamp: time.Now().UTC().Unix(),
 				}
-
 				if pJson, e := json.Marshal(State.Progress); e == nil {
 					progress <- pJson
 				}
@@ -270,13 +265,13 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 			lastHeight = <-headerHeight
 		}
 	}()
-	go func() {
+	go func(){
 		Header(abort, client, headerHeight)
 		cancel()
 	}()
 
 	go func() {
-		tick := time.NewTicker(500 * time.Millisecond)
+		tick := time.NewTicker(500*time.Millisecond)
 		for {
 			select {
 			case <-tick.C:
@@ -285,7 +280,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				}
 				State.Progress = &ProgressMsg{
 					Type:      "pct",
-					Pct:       math.Round(pct*100) / 100,
+					Pct:       math.Round(pct * 100)/100,
 					TimeStamp: time.Now().UTC().Unix(),
 				}
 				if pJson, e := json.Marshal(State.Progress); e == nil {
@@ -298,7 +293,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	}()
 
 	votes := make(chan *VoteState)
-	go func() {
+	go func(){
 		Votes(abort, client, votes)
 		cancel()
 	}()
