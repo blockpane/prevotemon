@@ -124,6 +124,12 @@ type CurrentState struct {
 	Progress *ProgressMsg `json:"progress"`
 }
 
+type NewProposer struct {
+	Type string `json:"type"`
+	Proposer string `json:"proposer"`
+	ProposerOper string `json:"proposer_oper"`
+}
+
 var State *CurrentState
 
 func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
@@ -163,10 +169,23 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	var lastTS time.Time
 	var pct float64
 	bm := bluemonday.StrictPolicy()
+	var sameRound int64
 	go func() {
 		for {
 			select {
 			case currentRound = <-newRound:
+				if currentRound.Height == sameRound {
+					State.Round.Proposer = bm.Sanitize(currentVals[currentRound.Index].Moniker)
+					State.Round.ProposerOper = currentVals[currentRound.Index].Valoper
+					j, _ := json.Marshal(&NewProposer{
+						Type:         "new_proposer",
+						Proposer:     bm.Sanitize(currentVals[currentRound.Index].Moniker),
+						ProposerOper: currentVals[currentRound.Index].Valoper,
+					})
+					rounds <-j
+					continue
+				}
+				sameRound = currentRound.Height
 				lastTS = time.Now().UTC()
 				pct = 0
 				State.PreVotes = make([]*PreVoteMsg, 0)

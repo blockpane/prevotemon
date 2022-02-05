@@ -27,16 +27,16 @@
     <div class="col-12">
     <div class="container" style="padding-bottom: 10px;">
       <div class="row">
-        <div class="col-5">
+        <div class="col-3">
           <div class="row">
-            <div class="col text-lg-center h5">Pre-Vote Status</div>
-            <div class="col align-middle">
+            <div class="col text-lg-center h5">Prevotes</div>
+            <div class="col text-start">
               <div class="form-check form-switch">
-                <input class="form-check-input bg-info" type="checkbox" role="switch" id="pauseSwitch">
+                <input class="form-check-input bg-light btn-outline-warning" type="checkbox" role="switch" id="pauseSwitch">
                 <label class="form-check-label" for="pauseSwitch">Pause</label>
               </div>
-              <select class="form-select bg-dark" aria-label="Time Scale" id="timeScale">
-                <option selected value="0">Linear Time</option>
+              <select class="form-select bg-light btn-outline-warning" aria-label="Time Scale" id="timeScale">
+                <option selected value="0">Linear</option>
                 <option value="2">log2</option>
                 <!-- option value="10">log10</option>
                 <option value="32">log32</option -->
@@ -44,7 +44,7 @@
             </div>
           </div>
         </div>
-        <div class="col-4">
+        <div class="col-6">
           <div class="row">
             <div class="col text-lg-end">Block:</div>
             <div class="col text-lg-start">Proposer</div>

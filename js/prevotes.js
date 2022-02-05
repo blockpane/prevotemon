@@ -262,6 +262,8 @@ async function chartPrevotes() {
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
+            } else if (updVote.type === "new_proposer") {
+                document.getElementById('proposer').innerText = updVote.proposer
             }
         });
         socket.onclose = function(e) {
@@ -294,10 +296,10 @@ async function chartPrevotes() {
     connectProgress()
 
     let lastSize = 0
-    let interval = 100
+    let interval = 75
     let userAgent = navigator.userAgent
     if(userAgent.match(/firefox|fxios/i)){
-        interval = 500
+        interval = 250
     }
     setInterval(update, interval);
     function update() {
