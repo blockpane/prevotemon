@@ -76,50 +76,13 @@ func Round(ctx context.Context, client *rpchttp.HTTP, rounds chan *NewRound) {
 	}
 }
 
-type roundTime struct {
-	HRS       string    `json:"height/round/step"`
-	StartTime time.Time `json:"start_time"`
-}
-
-func (rt roundTime) height() int64 {
-	i, _ := strconv.Atoi(strings.Split(rt.HRS, `/`)[0])
-	return int64(i)
-}
-
-func fetchRoundTime(ctx context.Context, height int64, client *rpchttp.HTTP) (time.Time, error) {
-	cState, err := client.ConsensusState(ctx)
-	if err != nil {
-		return time.Now().UTC(), err
-	}
-	rt := &roundTime{}
-	err = json.Unmarshal([]byte(cState.RoundState), rt)
-	if err != nil {
-		return time.Now().UTC(), err
-	}
-	h := rt.height()
-	if h == 0 || h > height {
-		return time.Now(), fmt.Errorf("impossible height returned: %d", h)
-	}
-	if h == height-1 {
-		time.Sleep(200 * time.Millisecond)
-		cState, err = client.ConsensusState(ctx)
-		if err != nil {
-			return time.Now().UTC(), err
-		}
-	}
-	if rt.StartTime.Unix() == 0 {
-		return time.Now(), fmt.Errorf("bad time: %v", rt.StartTime)
-	}
-	return rt.StartTime, nil
-}
-
 func Header(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
 	event, err := client.Subscribe(ctx, "pvmon-header", "tm.event = 'NewBlockHeader'")
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	defer client.Unsubscribe(context.Background(), "pvmon-header", "tm.event = 'NewBlockHeader'")
+	defer client.Unsubscribe(context.Background(),"pvmon-header", "tm.event = 'NewBlockHeader'")
 
 	for {
 		select {
@@ -199,21 +162,14 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	newRound := make(chan *NewRound)
 	var lastTS time.Time
 	var pct float64
-	newRoundMux := sync.Mutex{}
 	bm := bluemonday.StrictPolicy()
-	nextVotes := make([]*PreVoteMsg, 0)
 	go func() {
 		for {
 			select {
 			case currentRound = <-newRound:
-				newRoundMux.Lock()
-				var e error
-				lastTS, e = fetchRoundTime(abort, currentRound.Height, client)
-				if err != nil {
-					log.Println(err)
-				}
+				lastTS = time.Now().UTC()
 				pct = 0
-				State.PreVotes = nextVotes
+				State.PreVotes = make([]*PreVoteMsg, 0)
 				State.Progress = &ProgressMsg{
 					Type:      "pct",
 					Pct:       0,
@@ -239,15 +195,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					continue
 				}
 				rounds <- roundJson
-				newRoundMux.Unlock()
-				time.Sleep(100 * time.Millisecond) // give the browser a chance.
-				if len(nextVotes) > 0 {
-					for _, v := range nextVotes {
-						j, _ := json.Marshal(v)
-						updates <- j
-					}
-				}
-				nextVotes = make([]*PreVoteMsg, 0)
 			case <-abort.Done():
 				return
 			}
@@ -301,17 +248,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	for {
 		select {
 		case v := <-votes:
-			if v.Height == lastHeight+2 {
-				nextVotes = append(nextVotes, &PreVoteMsg{
-					Type:     "prevote",
-					Moniker:  currentVals[int(v.Index)].Moniker,
-					ValOper:  currentVals[int(v.Index)].Valoper,
-					Weight:   float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000, // three digits of precision, rounded down.
-					OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
-					Height:   v.Height,
-				})
-				continue
-			} else if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {
+			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {
 				continue
 			}
 			//fmt.Printf("%60s: %3.2f%% %s\n", currentVals[int(v.Index)].Moniker, 100*currentVals[int(v.Index)].Weight, v.Time.Sub(lastTS).String())
@@ -323,17 +260,14 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
 				Height:   v.Height,
 			}
-			newRoundMux.Lock()
 			State.PreVotes = append(State.PreVotes, newVote)
 			j, e := json.Marshal(newVote)
 			pct += float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000
 			if e != nil {
 				log.Println(e)
-				newRoundMux.Unlock()
 				continue
 			}
 			updates <- j
-			newRoundMux.Unlock()
 		case <-abort.Done():
 			cancel()
 			return
