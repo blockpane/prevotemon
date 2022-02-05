@@ -16,6 +16,9 @@ async function chartPrevotes() {
         initialState = await response.json()
 
         for (const v of initialState.pre_votes) {
+            if (v.offset_ms < -1000) {
+                continue
+            }
             let size = v.weight * 15 ^ 2
             if (size < 15) {
                 size = 15
@@ -111,7 +114,7 @@ async function chartPrevotes() {
 
     let chartDom = document.getElementById('votes');
     let myChart = echarts.init(chartDom);
-    let option;
+    let option
 
     let dedup = {}
     option = {
@@ -131,15 +134,18 @@ async function chartPrevotes() {
                     type: 'dotted',
                     color: "grey"
                 }
-            }
+            },
+            //scale: true,
+            name: "Milliseconds",
         },
         yAxis: {
             splitLine: {
                 show: false,
             },
-            scale: true,
+            //scale: true,
             type: "log",
             logBase: 2,
+            name: '% Consensus Power'
         },
         series: [
             {
@@ -194,13 +200,39 @@ async function chartPrevotes() {
 
     option && myChart.setOption(option);
 
-
     let skipUpdate = false
+    let lastLogBase = "0"
     setInterval(pause, 1000);
     async function pause() {
+        const base = document.getElementById('timeScale').value
+        console.log(base)
+        if (base !== lastLogBase) {
+            switch (base) {
+                case "0":
+                    option.xAxis.type = 'value'
+                    break
+                case "2":
+                    option.xAxis.type = 'log'
+                    option.xAxis.logBase = 2
+                    myChart.setOption(option)
+                    break
+                case "10":
+                    option.xAxis.type = 'log'
+                    option.xAxis.logBase = 10
+                    myChart.setOption(option)
+                    break
+                case "32":
+                    option.xAxis.type = 'log'
+                    option.xAxis.logBase = 32
+            }
+            myChart.setOption(option)
+            lastLogBase = base
+        }
         if (document.getElementById('pauseSwitch').checked === true) {
             skipUpdate = true
         } else if (skipUpdate === true) {
+            document.getElementById('timeScale').value = "0"
+            option.xAxis.type = 'value'
             option.series[0].data = []
             myChart.setOption(option)
             initialVotes = []
@@ -225,7 +257,6 @@ async function chartPrevotes() {
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
             if (updVote.type === "round" && skipUpdate === false) {
-                //console.log(updVote)
                 initialVotes = []
                 dedup = {}
                 myChart.setOption(option)
@@ -263,7 +294,7 @@ async function chartPrevotes() {
     connectProgress()
 
     let lastSize = 0
-    let interval = 50
+    let interval = 100
     let userAgent = navigator.userAgent
     if(userAgent.match(/firefox|fxios/i)){
         interval = 500
@@ -282,12 +313,16 @@ async function chartPrevotes() {
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
             if (updVote.type === "prevote" && dedup[updVote.valoper] !== true && skipUpdate === false) {
-                dedup[updVote.valoper] = true
-                let size = updVote.weight*15^2
-                if (size < 15) {
-                    size = 15
+                if (updVote.offset_ms < -1000) {
+                    console.log(`invalid offset for ${updVote.moniker}: ${updVote.offset_ms}`)
+                } else {
+                    dedup[updVote.valoper] = true
+                    let size = updVote.weight * 15 ^ 2
+                    if (size < 15) {
+                        size = 15
+                    }
+                    initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
                 }
-                initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
             }
         });
         socket.onclose = function(e) {
