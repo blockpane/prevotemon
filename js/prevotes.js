@@ -1,26 +1,31 @@
 async function chartPrevotes() {
 
-    const response = await fetch("/state", {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-cache',
-        credentials: 'same-origin',
-        redirect: 'error',
-        referrerPolicy: 'no-referrer'
-    });
-    let initialState = await response.json()
 
     let initialVotes = []
-    for (const v of initialState.pre_votes) {
-        let size = v.weight*15^2
-        if (size < 15) {
-            size = 15
+    let initialState = {}
+
+    async function getState() {
+        const response = await fetch("/state", {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'same-origin',
+            redirect: 'error',
+            referrerPolicy: 'no-referrer'
+        });
+        initialState = await response.json()
+
+        for (const v of initialState.pre_votes) {
+            let size = v.weight * 15 ^ 2
+            if (size < 15) {
+                size = 15
+            }
+            initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
         }
-        initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+        document.getElementById('blocknum').innerText = initialState.round.height
+        document.getElementById('proposer').innerText = initialState.round.proposer
     }
-    console.log(initialVotes)
-    document.getElementById('blocknum').innerText = initialState.round.height
-    document.getElementById('proposer').innerText = initialState.round.proposer
+    await getState()
 
     let pctChartDom = document.getElementById('percent');
     let pctChart = echarts.init(pctChartDom);
@@ -189,6 +194,27 @@ async function chartPrevotes() {
 
     option && myChart.setOption(option);
 
+
+    let skipUpdate = false
+    setInterval(pause, 1000);
+    async function pause() {
+        if (document.getElementById('pauseSwitch').checked === true) {
+            skipUpdate = true
+        } else if (skipUpdate === true) {
+            option.series[0].data = []
+            myChart.setOption(option)
+            initialVotes = []
+            await getState()
+            option.series[0].data = initialVotes
+            myChart.setOption(option)
+            document.getElementById('blocknum').innerText = initialState.round.height
+            document.getElementById('proposer').innerText = initialState.round.proposer
+            pctOption.series[0].data = [ initialState.progress.pct ]
+            pctChart.setOption(pctOption)
+            skipUpdate = false
+        }
+    }
+
     let wsProto = "ws://"
     if (location.protocol === "https:") {
         wsProto = "wss://"
@@ -198,7 +224,7 @@ async function chartPrevotes() {
         const socket = new WebSocket(wsProto + location.host + '/rounds/ws');
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
-            if (updVote.type === "round") {
+            if (updVote.type === "round" && skipUpdate === false) {
                 //console.log(updVote)
                 initialVotes = []
                 dedup = {}
@@ -221,7 +247,7 @@ async function chartPrevotes() {
         const socket = new WebSocket(wsProto + location.host + '/progress/ws');
         socket.addEventListener('message', function (event) {
             const updPct = JSON.parse(event.data);
-            if (updPct.type === "pct" && updPct.pct !== lastPct) {
+            if (updPct.type === "pct" && updPct.pct !== lastPct && skipUpdate === false) {
                 lastPct = updPct.pct
                 pctOption.series[0].data = [ updPct.pct ]
                 pctChart.setOption(pctOption)
@@ -237,9 +263,14 @@ async function chartPrevotes() {
     connectProgress()
 
     let lastSize = 0
-    setInterval(update, 100);
+    let interval = 50
+    let userAgent = navigator.userAgent
+    if(userAgent.match(/firefox|fxios/i)){
+        interval = 500
+    }
+    setInterval(update, interval);
     function update() {
-        if (lastSize !== initialVotes.length) {
+        if (lastSize !== initialVotes.length && skipUpdate === false) {
             lastSize = initialVotes.length
             option.series[0].data = initialVotes
             myChart.setOption(option)
@@ -250,7 +281,7 @@ async function chartPrevotes() {
         const socket = new WebSocket(wsProto + location.host + '/prevote/ws');
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
-            if (updVote.type === "prevote" && dedup[updVote.valoper] !== true) {
+            if (updVote.type === "prevote" && dedup[updVote.valoper] !== true && skipUpdate === false) {
                 dedup[updVote.valoper] = true
                 let size = updVote.weight*15^2
                 if (size < 15) {

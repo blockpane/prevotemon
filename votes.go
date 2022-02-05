@@ -121,7 +121,7 @@ type ProgressMsg struct {
 type CurrentState struct {
 	Round *NewRoundMsg `json:"round"`
 	PreVotes []*PreVoteMsg `json:"pre_votes"`
-	Progress *ProgressMsg
+	Progress *ProgressMsg `json:"progress"`
 }
 
 var State *CurrentState
