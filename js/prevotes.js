@@ -135,14 +135,14 @@ async function chartPrevotes() {
                     color: "grey"
                 }
             },
-            //scale: true,
+           scale: true,
             name: "Milliseconds",
         },
         yAxis: {
             splitLine: {
                 show: false,
             },
-            //scale: true,
+            scale: true,
             type: "log",
             logBase: 2,
             name: '% Consensus Power'
