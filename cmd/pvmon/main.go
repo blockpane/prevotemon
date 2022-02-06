@@ -66,9 +66,9 @@ func main() {
 		}
 	})
 
-	updates := make(chan []byte)
-	rounds := make(chan []byte)
-	progress := make(chan []byte)
+	updates := make(chan []byte, 1)
+	rounds := make(chan []byte, 1)
+	progress := make(chan []byte, 1)
 	go func() {
 		for {
 			select {
@@ -85,7 +85,7 @@ func main() {
 		for {
 			pvm.WatchPrevotes(pvm.Rpc, pvm.Rest, rounds, updates, progress)
 			log.Println("watch prevote routine exited, will retry in 5s")
-			time.Sleep(5*time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}()
 

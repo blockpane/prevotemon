@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	Rpc string
-	Rest string
+	Rpc    string
+	Rest   string
 	Listen int
 )
 

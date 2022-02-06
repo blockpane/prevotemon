@@ -4,6 +4,8 @@ async function chartPrevotes() {
     let initialVotes = []
     let initialState = {}
 
+    let height = 0
+    let waitForRound = false
     async function getState() {
         const response = await fetch("/state", {
             method: 'GET',
@@ -25,8 +27,10 @@ async function chartPrevotes() {
             }
             initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
         }
+        height = initialState.round.height
         document.getElementById('blocknum').innerText = initialState.round.height
         document.getElementById('proposer').innerText = initialState.round.proposer
+        waitForRound = true
     }
     await getState()
 
@@ -38,6 +42,7 @@ async function chartPrevotes() {
         series: [
             {
                 type: 'gauge',
+                animationDurationUpdate: 50,
                 progress: {
                     show: true,
                     width: 12,
@@ -202,10 +207,9 @@ async function chartPrevotes() {
 
     let skipUpdate = false
     let lastLogBase = "0"
-    setInterval(pause, 1000);
+    setInterval(pause, 100);
     async function pause() {
         const base = document.getElementById('timeScale').value
-        console.log(base)
         if (base !== lastLogBase) {
             switch (base) {
                 case "0":
@@ -214,12 +218,10 @@ async function chartPrevotes() {
                 case "2":
                     option.xAxis.type = 'log'
                     option.xAxis.logBase = 2
-                    myChart.setOption(option)
                     break
                 case "10":
                     option.xAxis.type = 'log'
                     option.xAxis.logBase = 10
-                    myChart.setOption(option)
                     break
                 case "32":
                     option.xAxis.type = 'log'
@@ -233,10 +235,10 @@ async function chartPrevotes() {
         } else if (skipUpdate === true) {
             document.getElementById('timeScale').value = "0"
             option.xAxis.type = 'value'
-            option.series[0].data = []
-            myChart.setOption(option)
+            //option.series[0].data = []
+            //myChart.setOption(option)
             initialVotes = []
-            await getState()
+            //await getState()
             option.series[0].data = initialVotes
             myChart.setOption(option)
             document.getElementById('blocknum').innerText = initialState.round.height
@@ -252,18 +254,51 @@ async function chartPrevotes() {
         wsProto = "wss://"
     }
 
+    let currentRound = 0
     function connectRounds() {
         const socket = new WebSocket(wsProto + location.host + '/rounds/ws');
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
-            if (updVote.type === "round" && skipUpdate === false) {
+            if (skipUpdate === true) {
+                return
+            }
+            if (updVote.type === "round"){
+                waitForRound = false
+                currentRound = updVote.height
                 initialVotes = []
                 dedup = {}
+                option.series[0].data = initialVotes
                 myChart.setOption(option)
+                //pctOption.series[0].data = [ 0 ]
+                //pctChart.setOption(pctOption)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
             } else if (updVote.type === "new_proposer") {
                 document.getElementById('proposer').innerText = updVote.proposer
+            } else if (updVote.type === "final" && updVote.height >= currentRound) {
+                waitForRound = false
+                //option.series[0].data = []
+                //myChart.setOption(option)
+                initialVotes = []
+                for (const v of updVote.Votes) {
+                    if (v.offset_ms < -1000) {
+                        continue
+                    }
+                    let size = v.weight * 15 ^ 2
+                    if (size < 15) {
+                        size = 15
+                    }
+                    initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+                }
+                option.series[0].data = initialVotes
+                myChart.setOption(option)
+                document.getElementById('blocknum').innerText = updVote.height
+                document.getElementById('proposer').innerText = updVote.proposer
+                pctOption.series[0].data = [ updVote.percent ]
+                pctChart.setOption(pctOption)
+                if (document.getElementById('pauseSwitch').checked === true) {
+                    skipUpdate = true
+                }
             }
         });
         socket.onclose = function(e) {
@@ -314,7 +349,10 @@ async function chartPrevotes() {
         const socket = new WebSocket(wsProto + location.host + '/prevote/ws');
         socket.addEventListener('message', function (event) {
             const updVote = JSON.parse(event.data);
-            if (updVote.type === "prevote" && dedup[updVote.valoper] !== true && skipUpdate === false) {
+            if (updVote.type === "prevote" && dedup[updVote.valoper] !== true && skipUpdate === false && waitForRound === false) {
+                if (updVote.height < height) {
+                    return
+                }
                 if (updVote.offset_ms < -1000) {
                     console.log(`invalid offset for ${updVote.moniker}: ${updVote.offset_ms}`)
                 } else {
@@ -323,7 +361,15 @@ async function chartPrevotes() {
                     if (size < 15) {
                         size = 15
                     }
-                    initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                    if (updVote.height > height) {
+                        height = updVote
+                        initialVotes = []
+                        initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        option.series[0].data = initialVotes
+                        myChart.setOption(option)
+                    } else {
+                        initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                    }
                 }
             }
         });

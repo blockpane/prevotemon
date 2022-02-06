@@ -32,10 +32,11 @@ type TrimmedVal struct {
 
 func Vals(ctx context.Context, rest string, vals chan []*Val) {
 	tick := time.NewTicker(6 * time.Second)
-	failed := make(chan interface{}, 1)
+	failed, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for {
 		select {
-		case <-failed:
+		case <-failed.Done():
 			return
 		case <-ctx.Done():
 			return
@@ -44,21 +45,21 @@ func Vals(ctx context.Context, rest string, vals chan []*Val) {
 				resp, err := http.Get(rest + "/cosmos/staking/v1beta1/validators?pagination.limit=200")
 				if err != nil {
 					log.Println(err)
-					close(failed)
+					cancel()
 					return
 				}
 				defer resp.Body.Close()
 				b, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
 					log.Println(err)
-					close(failed)
+					cancel()
 					return
 				}
 				valset := &TrimmedVal{}
 				err = json.Unmarshal(b, valset)
 				if err != nil {
 					log.Println(err)
-					close(failed)
+					cancel()
 					return
 				}
 				updated := make([]*Val, 0)
