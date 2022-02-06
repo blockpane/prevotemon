@@ -47,7 +47,6 @@ async function chartPrevotes() {
                     show: true,
                     width: 12,
                     itemStyle: {
-                        //color: ['rgb(89,71,190)', 'rgb(136,220,3)',]
                         color: {
                             type: 'linear',
                             x: 0,
@@ -59,7 +58,7 @@ async function chartPrevotes() {
                             }, {
                                 offset: 1, color: 'rgba(89,71,190,0.5)'
                             }],
-                            global: false // default is false
+                            global: false
                         }
                     }
                 },
@@ -81,14 +80,12 @@ async function chartPrevotes() {
                     length: 15,
                     lineStyle: {
                         width: 2,
-                        //color: '#999'
                         color: 'rgb(79,61,180)'
                     }
                 },
                 axisLabel: {
                     distance: 25,
                     color: 'rgba(136,220,3,0.4)',
-                    //color: '#999',
                     fontSize: 8
                 },
                 anchor: {
@@ -235,10 +232,7 @@ async function chartPrevotes() {
         } else if (skipUpdate === true) {
             document.getElementById('timeScale').value = "0"
             option.xAxis.type = 'value'
-            //option.series[0].data = []
-            //myChart.setOption(option)
             initialVotes = []
-            //await getState()
             option.series[0].data = initialVotes
             myChart.setOption(option)
             document.getElementById('blocknum').innerText = initialState.round.height
@@ -269,16 +263,12 @@ async function chartPrevotes() {
                 dedup = {}
                 option.series[0].data = initialVotes
                 myChart.setOption(option)
-                //pctOption.series[0].data = [ 0 ]
-                //pctChart.setOption(pctOption)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
             } else if (updVote.type === "new_proposer") {
                 document.getElementById('proposer').innerText = updVote.proposer
             } else if (updVote.type === "final" && updVote.height >= currentRound) {
                 waitForRound = false
-                //option.series[0].data = []
-                //myChart.setOption(option)
                 initialVotes = []
                 for (const v of updVote.Votes) {
                     if (v.offset_ms < -1000) {

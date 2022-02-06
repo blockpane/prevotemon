@@ -30,17 +30,6 @@ type FinalState struct {
 	Percent  float64 `json:"percent"`
 }
 
-// "round_state": {
-//      "height/round/step": "1774096/0/3",
-//      "start_time": "2022-02-05T20:22:02.927608492Z",
-//      "proposal_block_hash": "",
-//      "locked_block_hash": "",
-//      "valid_block_hash": "",
-//      "height_vote_set": [
-//        {
-//          "round": 0,
-//          "prevotes": [
-
 var currentVals = make([]*Val, 0)
 
 type simple constypes.RoundStateSimple
@@ -166,9 +155,6 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 						if deDup[i] || votes[i].IsZero() {
 							continue
 						}
-						//for State.Round.Height < height {
-						//	time.Sleep(10 * time.Millisecond)
-						//}
 						state <- &VoteState{
 							Index:  int32(i),
 							Type:   "prevote",
@@ -208,7 +194,6 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 							} else {
 								dumped["height"] = heightStr
 							}
-							//time.Sleep(100 * time.Millisecond)
 						}
 					}()
 					previousHeight = stateHeight
@@ -216,14 +201,7 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 					hits = 0
 				} else if stateHeight < previousHeight {
 					return
-				} //else if State.Round != nil && stateHeight > State.Round.Height {
-				//	for State.Round.Height < stateHeight {
-				//		time.Sleep(100 * time.Millisecond)
-				//	}
-				//}
-				//if !sendNewRound {
-				//	Percentage = pct
-				//}
+				}
 				send(votes, stateHeight)
 
 				if sendNewRound && hits > 0 && State.Round != nil && stateHeight > State.Round.Height {
@@ -384,7 +362,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		cancel()
 	}()
 
-	//time.Sleep(6 * time.Second) // ensure we have a valset before continuing, lazy lazy using sleep :P
 	for currentVals == nil || len(currentVals) == 0 {
 		time.Sleep(time.Second)
 	}
@@ -437,7 +414,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				pctUpdate <- 0.0
 
 				sameRound = currentRound.Height
-				//lastTS = currentRound.Start
 				fmt.Println("round started at:", lastTS, currentRound.Height)
 				Percentage = 0
 				State.PreVotes = make([]*PreVoteMsg, 0)
@@ -476,23 +452,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		cancel()
 	}()
 
-	//var lastHeight int64
-	//headerHeight := make(chan int64)
-	//go func() {
-	//	for {
-	//		select {
-	//		case lastHeight = <-headerHeight:
-	//		case <-abort.Done():
-	//			return
-	//		}
-
-	//	}
-	//}()
-	//go func() {
-	//	Header(abort, client, headerHeight)
-	//	cancel()
-	//}()
-
 	go func() {
 		tick := time.NewTicker(50 * time.Millisecond)
 		var last, p float64
@@ -504,9 +463,6 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					continue
 				}
 				last = p
-				//if pct > 100 {
-				//	continue
-				//}
 				State.Progress = &ProgressMsg{
 					Type:      "pct",
 					Pct:       math.Round(p*100) / 100,
@@ -534,11 +490,9 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	for {
 		select {
 		case v := <-votes:
-			//if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || v.Height != lastHeight+1 {
 			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index {
 				continue
 			}
-			//fmt.Printf("%60s: %3.2f%% %s\n", currentVals[int(v.Index)].Moniker, 100*currentVals[int(v.Index)].Weight, v.Time.Sub(lastTS).String())
 			newVote := &PreVoteMsg{
 				Type:     "prevote",
 				Moniker:  currentVals[int(v.Index)].Moniker,
