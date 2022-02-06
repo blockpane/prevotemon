@@ -8,6 +8,7 @@ import (
 	"github.com/textileio/go-threads/broadcast"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -61,7 +62,29 @@ func main() {
 			_, _ = writer.Write(pvm.IndexHtml)
 		case "/state":
 			writer.Header().Set("Content-Type", "application/json")
-			j, _ := json.MarshalIndent(pvm.State, "", "  ")
+			j, _ := json.Marshal(pvm.State)
+			_, _ = writer.Write(j)
+		case "/history":
+			writer.Header().Set("Content-Type", "application/json")
+			keys, ok := request.URL.Query()["height"]
+			if !ok {
+				_, _ = writer.Write([]byte(pvm.BlockNotFound))
+				return
+			}
+			n, err := strconv.Atoi(keys[0])
+			if err != nil {
+				_, _ = writer.Write([]byte(pvm.BlockNotFound))
+				return
+			}
+			var j []byte
+			if n == 0 || int64(n) > pvm.Cache.Highest {
+				j, _ = json.Marshal(pvm.State)
+			} else {
+				j, err = pvm.FetchRecord(int64(n))
+				if err != nil {
+					j = []byte(pvm.BlockNotFound)
+				}
+			}
 			_, _ = writer.Write(j)
 		}
 	})
@@ -99,3 +122,4 @@ func (ch CacheHandler) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 	writer.Header().Set("Cache-Control", "public, max-age=86400")
 	http.FileServer(http.FS(pvm.StaticContent)).ServeHTTP(writer, request)
 }
+

@@ -1,3 +1,30 @@
+function unselect() {
+    if (document.getElementById('pauseSwitch').checked === false) {
+        window.location.hash = ""
+        document.getElementById("forward").hidden = true
+    } else {
+        document.getElementById("forward").hidden = false
+    }
+}
+
+function navBlock(b = -1) {
+    const current = document.getElementById("blocknum").innerText
+    let n = parseInt(current)
+    if (isNaN(n)) {
+        n = parseInt(window.location.hash.replace("#", ""))
+        if (isNaN(n)) {
+            return
+        }
+    }
+    window.location.hash = n+b
+    if (document.getElementById('pauseSwitch').checked === false) {
+        document.getElementById('pauseSwitch').click()
+    }
+    document.getElementById("forward").hidden = false
+}
+
+let skipUpdate = false
+
 async function chartPrevotes() {
 
 
@@ -6,8 +33,21 @@ async function chartPrevotes() {
 
     let height = 0
     let waitForRound = false
+
     async function getState() {
-        const response = await fetch("/state", {
+        const hash = window.location.hash
+        console.log(hash)
+        const h = parseInt(hash.replace("#", ""), 10)
+        console.log(h)
+        let endpoint = "/state"
+        if (!isNaN(h) && h >= 1) {
+            endpoint = `/history?height=${h}`
+            if (document.getElementById('pauseSwitch').checked === false) {
+                document.getElementById('pauseSwitch').click()
+            }
+            skipUpdate = true
+        }
+        const response = await fetch(endpoint, {
             method: 'GET',
             mode: 'cors',
             cache: 'no-cache',
@@ -15,7 +55,14 @@ async function chartPrevotes() {
             redirect: 'error',
             referrerPolicy: 'no-referrer'
         });
-        initialState = await response.json()
+        try {
+            initialState = await response.json()
+        } catch {
+            if (!isNaN(h)) {
+                document.location.hash = ""
+                return
+            }
+        }
 
         for (const v of initialState.pre_votes) {
             if (v.offset_ms < -1000) {
@@ -27,7 +74,14 @@ async function chartPrevotes() {
             }
             initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
         }
+        if (initialState.round == null) {
+            document.location.hash = ""
+            return
+        }
         height = initialState.round.height
+        if (!isNaN(h)) {
+            window.location.hash = height
+        }
         document.getElementById('blocknum').innerText = initialState.round.height
         document.getElementById('proposer').innerText = initialState.round.proposer
         waitForRound = true
@@ -42,7 +96,7 @@ async function chartPrevotes() {
         series: [
             {
                 type: 'gauge',
-                animationDurationUpdate: 50,
+                animationDurationUpdate: 150,
                 progress: {
                     show: true,
                     width: 12,
@@ -202,11 +256,12 @@ async function chartPrevotes() {
 
     option && myChart.setOption(option);
 
-    let skipUpdate = false
     let lastLogBase = "0"
+    let lastHash = ""
     setInterval(pause, 100);
     async function pause() {
         const base = document.getElementById('timeScale').value
+        const hash = window.location.hash
         if (base !== lastLogBase) {
             switch (base) {
                 case "0":
@@ -227,20 +282,24 @@ async function chartPrevotes() {
             myChart.setOption(option)
             lastLogBase = base
         }
-        if (document.getElementById('pauseSwitch').checked === true) {
+        if (document.getElementById('pauseSwitch').checked === true && lastHash === hash) {
             skipUpdate = true
-        } else if (skipUpdate === true) {
+        } else if (skipUpdate === true || lastHash !== hash) {
             document.getElementById('timeScale').value = "0"
             option.xAxis.type = 'value'
             initialVotes = []
+            await getState()
             option.series[0].data = initialVotes
             myChart.setOption(option)
             document.getElementById('blocknum').innerText = initialState.round.height
             document.getElementById('proposer').innerText = initialState.round.proposer
             pctOption.series[0].data = [ initialState.progress.pct ]
             pctChart.setOption(pctOption)
-            skipUpdate = false
+            if (lastHash === hash) {
+                skipUpdate = false
+            }
         }
+        lastHash = hash
     }
 
     let wsProto = "ws://"
@@ -267,7 +326,8 @@ async function chartPrevotes() {
                 document.getElementById('proposer').innerText = updVote.proposer
             } else if (updVote.type === "new_proposer") {
                 document.getElementById('proposer').innerText = updVote.proposer
-            } else if (updVote.type === "final" && updVote.height >= currentRound) {
+            //} else if (updVote.type === "final" && updVote.height >= currentRound) {
+            } else if (updVote.type === "final") {
                 waitForRound = false
                 initialVotes = []
                 for (const v of updVote.Votes) {
@@ -322,7 +382,7 @@ async function chartPrevotes() {
 
     let lastSize = 0
     let interval = 75
-    let userAgent = navigator.userAgent
+    const userAgent = navigator.userAgent
     if(userAgent.match(/firefox|fxios/i)){
         interval = 250
     }
@@ -352,7 +412,7 @@ async function chartPrevotes() {
                         size = 15
                     }
                     if (updVote.height > height) {
-                        height = updVote
+                        height = updVote.height
                         initialVotes = []
                         initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
                         option.series[0].data = initialVotes

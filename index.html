@@ -31,14 +31,18 @@
           <div class="row">
             <div class="col text-lg-center h5">Prevotes</div>
             <div class="col text-start">
+              <div class="row">
               <div class="form-check form-switch">
-                <input class="form-check-input bg-light btn-outline-warning" type="checkbox" role="switch" id="pauseSwitch">
+                <input class="form-check-input bg-light btn-outline-warning" onchange="unselect()" type="checkbox" role="switch" id="pauseSwitch">
                 <label class="form-check-label" for="pauseSwitch">Pause</label>
               </div>
+              </div>
+              <div class="row">
               <select class="form-select bg-light btn-outline-warning" aria-label="Time Scale" id="timeScale">
                 <option selected value="0">Linear</option>
                 <option value="2">log2</option>
               </select>
+              </div>
             </div>
           </div>
         </div>
@@ -50,6 +54,23 @@
           <div class="row">
             <div class="col text-lg-end h5" id="blocknum"></div>
             <div class="col text-lg-start h5" id="proposer"></div>
+          </div>
+          <div class="row">
+            <div class="col text-end">
+              <button class="btn border-secondary" onclick="navBlock(-1)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-skip-backward" viewBox="0 0 16 16">
+                  <path d="M.5 3.5A.5.5 0 0 1 1 4v3.248l6.267-3.636c.52-.302 1.233.043 1.233.696v2.94l6.267-3.636c.52-.302 1.233.043 1.233.696v7.384c0 .653-.713.998-1.233.696L8.5 8.752v2.94c0 .653-.713.998-1.233.696L1 8.752V12a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5zm7 1.133L1.696 8 7.5 11.367V4.633zm7.5 0L9.196 8 15 11.367V4.633z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="col text-start">
+              &nbsp;
+              <button class="btn border-secondary" onclick="navBlock(1)" id="forward" hidden>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-skip-forward" viewBox="0 0 16 16">
+                  <path d="M15.5 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V8.752l-6.267 3.636c-.52.302-1.233-.043-1.233-.696v-2.94l-6.267 3.636C.713 12.69 0 12.345 0 11.692V4.308c0-.653.713-.998 1.233-.696L7.5 7.248v-2.94c0-.653.713-.998 1.233-.696L15 7.248V4a.5.5 0 0 1 .5-.5zM1 4.633v6.734L6.804 8 1 4.633zm7.5 0v6.734L14.304 8 8.5 4.633z"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         <div class="col-3" id="percent" style="width: 250px; height: 250px;"></div>

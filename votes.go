@@ -380,6 +380,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	var sameRound int64
 	var previousProposer string
 	pctUpdate := make(chan float64, 200)
+	persistChan := make(chan *redisMsg, 1)
 
 	go func() {
 		for {
@@ -396,15 +397,13 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					rounds <- j
 					continue
 				}
-				j, e := json.Marshal(&FinalState{
-					Type:     "final",
-					Votes:    State.PreVotes,
-					Height:   currentRound.Height - 1,
-					Proposer: bm.Sanitize(previousProposer),
-					Percent:  math.Round(Percentage*100) / 100,
-				})
-				if e == nil {
-					rounds <- j
+				j, e := json.Marshal(State)
+				if e == nil && State.Round != nil && State.Progress != nil && State.PreVotes != nil {
+					persistChan <- &redisMsg{
+						height: currentRound.Height - 1,
+						record: j,
+						slow:   false, // TODO: figure out if block was slow!
+					}
 				}
 				previousProposer = currentVals[currentRound.Index].Moniker
 				for currentRound.Height != stateHeight {
@@ -449,6 +448,10 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	}()
 	go func() {
 		Round(abort, client, newRound)
+		cancel()
+	}()
+	go func() {
+		redisWorker(abort, persistChan)
 		cancel()
 	}()
 
