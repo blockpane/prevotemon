@@ -77,7 +77,7 @@ func main() {
 				return
 			}
 			var j []byte
-			if n == 0 || int64(n) > pvm.Cache.Highest {
+			if n == 0 {
 				j, _ = json.Marshal(pvm.State)
 			} else {
 				j, err = pvm.FetchRecord(int64(n))

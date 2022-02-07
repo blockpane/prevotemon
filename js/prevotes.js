@@ -33,10 +33,14 @@ async function chartPrevotes() {
 
     let height = 0
     let waitForRound = false
+    let busy = false
 
     async function getState() {
+        if (busy) {
+            return
+        }
+        busy = true
         const hash = window.location.hash
-        console.log(hash)
         const h = parseInt(hash.replace("#", ""), 10)
         console.log(h)
         let endpoint = "/state"
@@ -60,6 +64,7 @@ async function chartPrevotes() {
         } catch {
             if (!isNaN(h)) {
                 document.location.hash = ""
+                busy = false
                 return
             }
         }
@@ -76,6 +81,7 @@ async function chartPrevotes() {
         }
         if (initialState.round == null) {
             document.location.hash = ""
+            busy = false
             return
         }
         height = initialState.round.height
@@ -85,6 +91,7 @@ async function chartPrevotes() {
         document.getElementById('blocknum').innerText = initialState.round.height
         document.getElementById('proposer').innerText = initialState.round.proposer
         waitForRound = true
+        busy = false
     }
     await getState()
 
