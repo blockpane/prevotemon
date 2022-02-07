@@ -10,7 +10,7 @@
   <link rel="icon" href="/img/favicon.png">
 </head>
 <body onload="showSummary()">
-<div class="container-xl border-bottom border-info" style="padding-top: 20px;">
+<div class="container-lg" style="padding-top: 20px;">
   <div class="row" style="padding-bottom: 10px;">
     <!--div class="col-4">
       <h3><span id="networkId" class="text-capitalize"></span> Monitor</h3>
@@ -78,9 +78,13 @@
     </div>
     </div>
   </div>
-  <div class="row">
-    <div class="col-12" id="votes" style="height: 800px;"></div>
+</div>
+<div class="container-fluid">
+  <div class="row d-flex justify-content-center">
+    <div class="col-10" id="votes"></div>
   </div>
+</div>
+  <div class="container-xl border-top border-info">
   <div class="row" style="padding-top: 30px;">
     <p align="center">
       <a href="https://blockpane.com"><img src="img/bp-logo-text.svg" height="30" alt="© 2021 Block Pane LLC."></a>&nbsp;
@@ -89,8 +93,14 @@
   </div>
 </div>
 <script type="text/javascript">
+    const sHeight = window.screen.height
+    let newHeight = (70*sHeight)/100.0
+    if (newHeight < 800){
+        newHeight = 800
+    }
+    document.getElementById("votes").style.height = `${newHeight}px`
     function showSummary(){
-        chartPrevotes();
+        chartPrevotes()
     }
 </script>
 
