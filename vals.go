@@ -25,9 +25,9 @@ type TrimmedVal struct {
 		ConsensusPubkey struct {
 			Key string `json:"key"`
 		} `json:"consensus_pubkey"`
-		Jailed          bool   `json:"jailed"`
-		Status          string `json:"status"`
-		Description     struct {
+		Jailed      bool   `json:"jailed"`
+		Status      string `json:"status"`
+		Description struct {
 			Moniker string `json:"moniker"`
 		} `json:"description"`
 		Tokens string `json:"tokens"`

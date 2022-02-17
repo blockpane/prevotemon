@@ -304,7 +304,7 @@ func (fp *finalProposer) add(height int64, moniker, valoper string) {
 	defer fp.Unlock()
 	fp.Block[height] = []string{moniker, valoper}
 	for k := range fp.Block {
-		if k < height - 10 {
+		if k < height-10 {
 			delete(fp.Block, k)
 		}
 	}
@@ -348,7 +348,7 @@ func newHeader(ctx context.Context, client *rpchttp.HTTP) {
 						log.Println(bad)
 						continue
 					}
-					if valAddr == v.Header.ProposerAddress.String(){
+					if valAddr == v.Header.ProposerAddress.String() {
 						finalProposers.add(v.Header.Height, bm.Sanitize(currentVals[i].Moniker), currentVals[i].Valoper)
 					}
 				}
@@ -372,11 +372,11 @@ func pubToHexAddr(pub string) (string, error) {
 }
 
 type NewRoundMsg struct {
-	Type         string `json:"type"`
-	Proposer     string `json:"proposer"`
-	ProposerOper string `json:"proposer_oper"`
-	Height       int64  `json:"height"`
-	TimeStamp    int64  `json:"time_stamp"`
+	Type            string `json:"type"`
+	Proposer        string `json:"proposer"`
+	ProposerOper    string `json:"proposer_oper"`
+	Height          int64  `json:"height"`
+	TimeStamp       int64  `json:"time_stamp"`
 	TimeOutProposer string `json:"time_out_proposer"`
 }
 

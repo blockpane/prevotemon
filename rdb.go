@@ -25,7 +25,7 @@ func redisWorker(ctx context.Context, save chan *redisMsg) {
 
 	// background worker to cleanup old redis records:
 	go func() {
-		tick := time.NewTicker(10*time.Minute)
+		tick := time.NewTicker(10 * time.Minute)
 		for {
 			select {
 			case <-tick.C:
@@ -58,7 +58,7 @@ func redisWorker(ctx context.Context, save chan *redisMsg) {
 					}
 					keys = make([]string, 0)
 					for _, key := range index {
-						if key < highest - maxRecords {
+						if key < highest-maxRecords {
 							s := strconv.Itoa(key)
 							if s != "" {
 								keys = append(keys, s)
@@ -81,9 +81,10 @@ func redisWorker(ctx context.Context, save chan *redisMsg) {
 	for {
 		select {
 		case m := <-save:
-			e := saveRecord(m.height, m.record, m.slow); if e != nil {
-			log.Println("could not save record to redis", e)
-		}
+			e := saveRecord(m.height, m.record, m.slow)
+			if e != nil {
+				log.Println("could not save record to redis", e)
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -150,7 +151,7 @@ func FetchRecord(height int64) ([]byte, error) {
 
 type LocalCache struct {
 	sync.RWMutex
-	States map[int64][]byte
+	States  map[int64][]byte
 	Highest int64
 }
 
@@ -166,7 +167,7 @@ func (lc *LocalCache) trim() {
 	lc.Lock()
 	defer lc.Unlock()
 	for k := range lc.States {
-		if k < lc.Highest - 10 {
+		if k < lc.Highest-10 {
 			delete(lc.States, k)
 		}
 	}

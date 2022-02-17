@@ -65,7 +65,7 @@ func main() {
 			j, _ := json.Marshal(pvm.State)
 			_, _ = writer.Write(j)
 		case "/chainid":
-			_, _ = writer.Write([]byte(fmt.Sprintf(`{"chain_id": "%s"}`,pvm.ChainID)))
+			_, _ = writer.Write([]byte(fmt.Sprintf(`{"chain_id": "%s"}`, pvm.ChainID)))
 		case "/history":
 			writer.Header().Set("Content-Type", "application/json")
 			keys, ok := request.URL.Query()["height"]
@@ -124,4 +124,3 @@ func (ch CacheHandler) ServeHTTP(writer http.ResponseWriter, request *http.Reque
 	writer.Header().Set("Cache-Control", "public, max-age=86400")
 	http.FileServer(http.FS(pvm.StaticContent)).ServeHTTP(writer, request)
 }
-
