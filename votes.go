@@ -133,7 +133,7 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 				defer func() {
 					busy = false
 				}()
-				timeout, cnl := context.WithTimeout(context.Background(), time.Second)
+				timeout, cnl := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cnl()
 				resp, err := client.ConsensusState(timeout)
 				if err != nil {
