@@ -233,8 +233,7 @@ func VoteStream(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState
 		select {
 		case e := <-event:
 			v := e.Data.(types.EventDataVote).Vote
-			//if v.Type == 1 && !deDup[v.ValidatorIndex] {
-			if v.Type == 1 {
+			if v.Type == 1 && !deDup[v.ValidatorIndex] {
 				state <- &VoteState{
 					Index: v.ValidatorIndex,
 					Type:  v.Type.String(),
