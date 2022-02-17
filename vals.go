@@ -16,11 +16,15 @@ type Val struct {
 	Valoper string
 	Weight  float64
 	tokens  uint64
+	pubkey  string
 }
 
 type TrimmedVal struct {
 	Validators []struct {
 		OperatorAddress string `json:"operator_address"`
+		ConsensusPubkey struct {
+			Key string `json:"key"`
+		} `json:"consensus_pubkey"`
 		Jailed          bool   `json:"jailed"`
 		Status          string `json:"status"`
 		Description     struct {
@@ -79,6 +83,7 @@ func Vals(ctx context.Context, rest string, vals chan []*Val) {
 						Moniker: v.Description.Moniker,
 						Valoper: v.OperatorAddress,
 						tokens:  uint64(tokensInt),
+						pubkey:  v.ConsensusPubkey.Key,
 					})
 				}
 				if len(updated) == 0 {

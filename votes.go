@@ -2,6 +2,9 @@ package pvm
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/microcosm-cc/bluemonday"
@@ -12,6 +15,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -286,7 +290,38 @@ func Round(ctx context.Context, client *rpchttp.HTTP, rounds chan *NewRound) {
 	}
 }
 
-func Header(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
+type finalProposer struct {
+	sync.Mutex
+	Block map[int64][]string
+}
+
+var finalProposers = finalProposer{
+	Block: make(map[int64][]string),
+}
+
+func (fp *finalProposer) add(height int64, moniker, valoper string) {
+	fp.Lock()
+	defer fp.Unlock()
+	fp.Block[height] = []string{moniker, valoper}
+	for k := range fp.Block {
+		if k < height - 10 {
+			delete(fp.Block, k)
+		}
+	}
+}
+
+func (fp *finalProposer) get(height int64) (moniker, valoper string) {
+	fp.Lock()
+	defer fp.Unlock()
+	p := fp.Block[height]
+	if len(p) == 0 {
+		return "", ""
+	}
+	return p[0], p[1]
+}
+
+//func newHeader(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
+func newHeader(ctx context.Context, client *rpchttp.HTTP) {
 	event, err := client.Subscribe(ctx, "pvmon-header", "tm.event = 'NewBlockHeader'")
 	if err != nil {
 		log.Println(err)
@@ -295,14 +330,45 @@ func Header(ctx context.Context, client *rpchttp.HTTP, last chan int64) {
 	defer client.Unsubscribe(context.Background(), "pvmon-header", "tm.event = 'NewBlockHeader'")
 
 	for {
+		if len(currentVals) == 0 {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+
+	bm := bluemonday.StrictPolicy()
+	for {
 		select {
 		case e := <-event:
-			v := e.Data.(types.EventDataNewBlockHeader)
-			last <- v.Header.Height
+			if v, ok := e.Data.(types.EventDataNewBlockHeader); ok {
+				for i := range currentVals {
+					valAddr, bad := pubToHexAddr(currentVals[i].pubkey)
+					if bad != nil {
+						log.Println(bad)
+						continue
+					}
+					if valAddr == v.Header.ProposerAddress.String(){
+						finalProposers.add(v.Header.Height, bm.Sanitize(currentVals[i].Moniker), currentVals[i].Valoper)
+					}
+				}
+			}
+			//last <- v.Header.Height
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func pubToHexAddr(pub string) (string, error) {
+	b := make([]byte, 32)
+	_, err := base64.StdEncoding.Decode(b, []byte(pub))
+	if err != nil {
+		return "", err
+	}
+	sha := sha256.New()
+	sha.Write(b)
+	return strings.ToUpper(hex.EncodeToString(sha.Sum(nil)[:20])), nil
 }
 
 type NewRoundMsg struct {
@@ -311,6 +377,7 @@ type NewRoundMsg struct {
 	ProposerOper string `json:"proposer_oper"`
 	Height       int64  `json:"height"`
 	TimeStamp    int64  `json:"time_stamp"`
+	TimeOutProposer string `json:"time_out_proposer"`
 }
 
 type PreVoteMsg struct {
@@ -407,6 +474,15 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					rounds <- j
 					continue
 				}
+				// double check that we didn't get a new proposer
+				if State.Round != nil {
+					if m, v := finalProposers.get(State.Round.Height); m != "" && m != State.Round.Proposer {
+						log.Printf("proposer changed on block %d, from %s to %s", State.Round.Height, State.Round.Proposer, m)
+						State.Round.TimeOutProposer = State.Round.Proposer
+						State.Round.Proposer = m
+						State.Round.ProposerOper = v
+					}
+				}
 				j, e := json.Marshal(State)
 				if e == nil && State.Round != nil && State.Progress != nil && State.PreVotes != nil {
 					persistChan <- &redisMsg{
@@ -455,6 +531,10 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				return
 			}
 		}
+	}()
+	go func() {
+		newHeader(abort, client)
+		cancel()
 	}()
 	go func() {
 		Round(abort, client, newRound)

@@ -147,7 +147,14 @@ async function chartPrevotes() {
             window.location.hash = height
         }
         document.getElementById('blocknum').innerText = initialState.round.height
+        const d = new Date(initialState.round.time_stamp * 1000)
+        document.getElementById('blocktime').innerText = d.toUTCString()
         document.getElementById('proposer').innerText = initialState.round.proposer
+        if (initialState.round.time_out_proposer !== "") {
+            document.getElementById('timedOut').innerText = `${initialState.round.time_out_proposer} - failed to propose!`
+        } else {
+            document.getElementById('timedOut').innerText = ""
+        }
         waitForRound = true
         busy = false
     }
@@ -334,7 +341,8 @@ async function chartPrevotes() {
                     },
                     fontSize: 18,
                     fontWeight: "lighter",
-                    color: 'rgb(126,189,8)'
+                    //color: 'rgb(126,189,8)'
+                    color: "white",
                 },
                 emphasis: {
                     focus: 'series',
@@ -387,7 +395,8 @@ async function chartPrevotes() {
                     },
                     fontSize: 14,
                     fontWeight: "lighter",
-                    color: "yellow",
+                    //color: "yellow",
+                    color: "white",
                 },
                 emphasis: {
                     focus: 'series',
@@ -466,6 +475,8 @@ async function chartPrevotes() {
             myChart.setOption(option)
             document.getElementById('blocknum').innerText = initialState.round.height
             document.getElementById('proposer').innerText = initialState.round.proposer
+            const d = new Date(initialState.round.time_stamp * 1000)
+            document.getElementById('blocktime').innerText = d.toUTCString()
             currentProposer = initialState.round.proposer
             pctOption.series[0].data = [ initialState.progress.pct ]
             pctChart.setOption(pctOption)
@@ -503,6 +514,8 @@ async function chartPrevotes() {
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
+                const d = new Date(updVote.time_stamp * 1000)
+                document.getElementById('blocktime').innerText = d.toUTCString()
             } else if (updVote.type === "new_proposer") {
                 currentProposer = updVote.proposer
                 document.getElementById('proposer').innerText = updVote.proposer
@@ -535,6 +548,8 @@ async function chartPrevotes() {
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
+                const d = new Date(updVote.time_stamp * 1000)
+                document.getElementById('blocktime').innerText = d.toUTCString()
                 pctOption.series[0].data = [ updVote.percent ]
                 pctChart.setOption(pctOption)
                 if (document.getElementById('pauseSwitch').checked === true) {
