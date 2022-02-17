@@ -148,7 +148,7 @@ async function chartPrevotes() {
         document.getElementById('proposer').innerText = initialState.round.proposer
         document.getElementById('timedOut').innerText = ""
         if (initialState.round.time_out_proposer !== "") {
-            document.getElementById('timedOut').innerText = `${initialState.round.time_out_proposer} - failed to propose!`
+            document.getElementById('timedOut').innerText = `${initialState.round.time_out_proposer} - did not finalize block`
         }
         waitForRound = true
         busy = false
