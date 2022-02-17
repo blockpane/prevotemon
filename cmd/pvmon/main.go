@@ -70,12 +70,12 @@ func main() {
 			writer.Header().Set("Content-Type", "application/json")
 			keys, ok := request.URL.Query()["height"]
 			if !ok {
-				_, _ = writer.Write([]byte(pvm.BlockNotFound))
+				_, _ = writer.Write(pvm.BlockNotFound(request.URL.Query()["height"][0]))
 				return
 			}
 			n, err := strconv.Atoi(keys[0])
 			if err != nil {
-				_, _ = writer.Write([]byte(pvm.BlockNotFound))
+				_, _ = writer.Write(pvm.BlockNotFound(request.URL.Query()["height"][0]))
 				return
 			}
 			var j []byte
@@ -84,7 +84,7 @@ func main() {
 			} else {
 				j, err = pvm.FetchRecord(int64(n))
 				if err != nil {
-					j = []byte(pvm.BlockNotFound)
+					j = pvm.BlockNotFound(request.URL.Query()["height"][0])
 				}
 			}
 			_, _ = writer.Write(j)

@@ -142,18 +142,13 @@ async function chartPrevotes() {
         }
 
         height = initialState.round.height
-        // fixme! causes a reset to current height....
-        if (!isNaN(h)) {
-            window.location.hash = height
-        }
         document.getElementById('blocknum').innerText = initialState.round.height
         const d = new Date(initialState.round.time_stamp * 1000)
         document.getElementById('blocktime').innerText = d.toUTCString()
         document.getElementById('proposer').innerText = initialState.round.proposer
+        document.getElementById('timedOut').innerText = ""
         if (initialState.round.time_out_proposer !== "") {
             document.getElementById('timedOut').innerText = `${initialState.round.time_out_proposer} - failed to propose!`
-        } else {
-            document.getElementById('timedOut').innerText = ""
         }
         waitForRound = true
         busy = false
@@ -519,6 +514,10 @@ async function chartPrevotes() {
             } else if (updVote.type === "new_proposer") {
                 currentProposer = updVote.proposer
                 document.getElementById('proposer').innerText = updVote.proposer
+                document.getElementById('timedOut').innerText = ""
+                if (updVote.time_out_proposer !== "") {
+                    document.getElementById('timedOut').innerText = `${updVote.time_out_proposer} - failed to propose!`
+                }
             } else if (updVote.type === "final" && updVote.height >= currentRound) {
             //} else if (updVote.type === "final") {
                 waitForRound = false
@@ -620,6 +619,7 @@ async function chartPrevotes() {
                         size = 15
                     }
                     if (updVote.height > height) {
+                        document.getElementById('timedOut').innerText = ""
                         height = updVote.height
                         initialVotes = []
                         highlightVotes = []

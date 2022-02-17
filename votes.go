@@ -403,9 +403,10 @@ type CurrentState struct {
 }
 
 type NewProposer struct {
-	Type         string `json:"type"`
-	Proposer     string `json:"proposer"`
-	ProposerOper string `json:"proposer_oper"`
+	Type            string `json:"type"`
+	Proposer        string `json:"proposer"`
+	ProposerOper    string `json:"proposer_oper"`
+	TimeOutProposer string `json:"time_out_proposer"`
 }
 
 var State *CurrentState
@@ -479,8 +480,15 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 					if m, v := finalProposers.get(State.Round.Height); m != "" && m != State.Round.Proposer {
 						log.Printf("proposer changed on block %d, from %s to %s", State.Round.Height, State.Round.Proposer, m)
 						State.Round.TimeOutProposer = State.Round.Proposer
-						State.Round.Proposer = m
+						State.Round.Proposer = bm.Sanitize(m)
 						State.Round.ProposerOper = v
+						j, _ := json.Marshal(&NewProposer{
+							Type:            "new_proposer",
+							Proposer:        State.Round.Proposer,
+							ProposerOper:    State.Round.ProposerOper,
+							TimeOutProposer: State.Round.TimeOutProposer,
+						})
+						rounds <- j
 					}
 				}
 				j, e := json.Marshal(State)

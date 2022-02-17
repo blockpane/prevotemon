@@ -19,7 +19,10 @@ type redisMsg struct {
 }
 
 const maxRecords = 500_000 // 500k is probably around 16MiB of RAM.
-const BlockNotFound = `{"round":{"height":"Block Not Found","proposer":"","type":"round"},"progress":{"type":"pct","pct":0},"pre_votes":[]}`
+func BlockNotFound(height string) []byte {
+	h, _ := strconv.Atoi(height)
+	return []byte(fmt.Sprintf(`{"round":{"height":"%d","proposer":"Block Not Found","type":"round"},"progress":{"type":"pct","pct":0},"pre_votes":[]}`, h))
+}
 
 func redisWorker(ctx context.Context, save chan *redisMsg) {
 
@@ -134,14 +137,14 @@ func saveRecord(height int64, record []byte, slow bool) error {
 
 func FetchRecord(height int64) ([]byte, error) {
 	if height == 0 {
-		return []byte(BlockNotFound), errors.New("invalid height")
+		return BlockNotFound("0"), errors.New("invalid height")
 	}
 	if ok, record := Cache.get(height); ok {
 		return record, nil
 	}
 	rdb, err := getRedisClient()
 	if err != nil {
-		return []byte(BlockNotFound), err
+		return BlockNotFound(fmt.Sprintf("%d", height)), err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
