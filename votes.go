@@ -200,6 +200,7 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 					sendNewRound = true
 					hits = 0
 				} else if stateHeight < previousHeight {
+
 					return
 				}
 				send(votes, stateHeight)
@@ -232,7 +233,8 @@ func VoteStream(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState
 		select {
 		case e := <-event:
 			v := e.Data.(types.EventDataVote).Vote
-			if v.Type == 1 && !deDup[v.ValidatorIndex] {
+			//if v.Type == 1 && !deDup[v.ValidatorIndex] {
+			if v.Type == 1 {
 				state <- &VoteState{
 					Index: v.ValidatorIndex,
 					Type:  v.Type.String(),
@@ -319,6 +321,7 @@ type PreVoteMsg struct {
 	Weight   float64 `json:"weight"`
 	OffsetMs int64   `json:"offset_ms"`
 	Height   int64   `json:"height"`
+	Proposer bool    `json:"proposer"`
 }
 
 type ProgressMsg struct {
@@ -373,6 +376,14 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		return
 	}
 	defer client.Stop()
+
+	status, err := client.Status(abort)
+	if err != nil {
+		log.Println(err)
+		cancel()
+	} else {
+		ChainID = status.NodeInfo.Network
+	}
 
 	currentRound := &NewRound{}
 	newRound := make(chan *NewRound, 1)
@@ -493,7 +504,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	for {
 		select {
 		case v := <-votes:
-			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index {
+			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || State.Round == nil {
 				continue
 			}
 			newVote := &PreVoteMsg{
@@ -503,6 +514,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				Weight:   float64(math.Floor(100000*currentVals[int(v.Index)].Weight)) / 1000, // three digits of precision, rounded down.
 				OffsetMs: v.Time.Sub(lastTS).Milliseconds(),
 				Height:   v.Height,
+				Proposer: currentVals[int(v.Index)].Moniker == State.Round.Proposer,
 			}
 			State.PreVotes = append(State.PreVotes, newVote)
 			j, e := json.Marshal(newVote)

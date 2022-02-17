@@ -10,6 +10,7 @@ import (
 var (
 	Rpc                 string
 	Rest                string
+	ChainID             string
 	Listen              int
 	Cache               *LocalCache
 	redisUrl, redisPass string

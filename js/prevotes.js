@@ -31,12 +31,24 @@ function navBlock(b = -1) {
         if (isNaN(n)) {
             return
         }
+    } else {
+        window.location.hash = n+b
     }
-    window.location.hash = n+b
     if (document.getElementById('pauseSwitch').checked === false) {
         document.getElementById('pauseSwitch').click()
     }
     document.getElementById("forward").hidden = false
+}
+
+let searchFor = "                                                 " // should never match
+
+function setSearch() {
+    const val = document.getElementById("searchFor").value
+    if (val === "") {
+        searchFor = "                                                 " // should not match
+    } else {
+        searchFor = val
+    }
 }
 
 let skipUpdate = false
@@ -45,11 +57,30 @@ async function chartPrevotes() {
 
 
     let initialVotes = []
+    let highlightVotes = []
+    let searchVotes = []
     let initialState = {}
+    let currentProposer = ""
 
     let height = 0
     let waitForRound = false
     let busy = false
+
+    async function getChainId() {
+        const response = await fetch("/chainid", {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'same-origin',
+            redirect: 'error',
+            referrerPolicy: 'no-referrer'
+        });
+        const resp = await response.json()
+        if (resp.chain_id !== "") {
+            document.getElementById('chainid').innerText = resp.chain_id + " Prevotes"
+        }
+    }
+    await getChainId()
 
     async function getState() {
         if (busy) {
@@ -85,6 +116,14 @@ async function chartPrevotes() {
             }
         }
 
+        if (initialState.round == null) {
+            currentProposer = ""
+            document.location.hash = ""
+            busy = false
+            return
+        }
+        currentProposer = initialState.round.proposer
+        console.log(initialState.round.proposer)
         for (const v of initialState.pre_votes) {
             if (v.offset_ms < -1000) {
                 continue
@@ -93,14 +132,17 @@ async function chartPrevotes() {
             if (size < 15) {
                 size = 15
             }
-            initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+            if (v.moniker === currentProposer) {
+                highlightVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+            } else if (v.moniker.includes(searchFor)) {
+                searchVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+            } else {
+                initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+            }
         }
-        if (initialState.round == null) {
-            document.location.hash = ""
-            busy = false
-            return
-        }
+
         height = initialState.round.height
+        // fixme! causes a reset to current height....
         if (!isNaN(h)) {
             window.location.hash = height
         }
@@ -273,7 +315,111 @@ async function chartPrevotes() {
                         }
                     ])
                 },
-            }
+            },
+            {
+                name: 'search',
+                data: [],
+                type: 'scatter',
+                symbol: "circle",
+                symbolSize: function (data) {
+                    if (data[2] < 50) {
+                        return 50
+                    }
+                    return data[2]
+                },
+                label: {
+                    show: true,
+                    formatter: function (param) {
+                        return param.data[3]
+                    },
+                    fontSize: 18,
+                    fontWeight: "lighter",
+                    color: 'rgb(126,189,8)'
+                },
+                emphasis: {
+                    focus: 'series',
+                    label: {
+                        show: true,
+                        formatter: function (param) {
+                            return `${param.data[3]}: ${param.data[1]}% ${param.data[0]/1000.0} seconds`;
+                        },
+                        position: 'top',
+                        color: "white",
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        fontSize: 24,
+                    }
+                },
+                itemStyle: {
+                    shadowBlur: 8,
+
+                    shadowColor: 'rgba(9,92,0,0.31)',
+                    shadowOffsetY: -4,
+                    //color: new echarts.graphic.RadialGradient(0.8, 0.8, 1, [
+                    color: new echarts.graphic.RadialGradient(1.0, 0.8, 1, [
+                        {
+                            offset: 0,
+                            color: 'rgb(126,189,8)'
+                            //color: 'rgb(107,59,177)',
+                        },
+                        {
+                            offset: 1,
+                            //color: 'rgb(101,9,21)'
+                            color: 'rgb(0,0,0)',
+                        }
+                    ])
+                },
+            },
+            {
+                name: 'search',
+                data: [],
+                type: 'scatter',
+                symbol: "circle",
+                symbolSize: function (data) {
+                    if (data[2] < 50) {
+                        return 50
+                    }
+                    return data[2]
+                },
+                label: {
+                    show: true,
+                    formatter: function (param) {
+                        return param.data[3]
+                    },
+                    fontSize: 14,
+                    fontWeight: "lighter",
+                    color: "yellow",
+                },
+                emphasis: {
+                    focus: 'series',
+                    label: {
+                        show: true,
+                        formatter: function (param) {
+                            return `${param.data[3]}: ${param.data[1]}% ${param.data[0]/1000.0} seconds`;
+                        },
+                        position: 'top',
+                        color: "white",
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        fontSize: 24,
+                    }
+                },
+                itemStyle: {
+                    shadowBlur: 20,
+                    shadowColor:'rgba(116,78,2,0.53)',
+                    shadowOffsetY: -3,
+                    color: new echarts.graphic.RadialGradient(1.0, 0.8, 1, [
+                        {
+                            offset: 0,
+                            color: 'rgb(194,131,6)'
+                            //color: 'rgb(107,59,177)',
+                        },
+                        {
+                            offset: 1,
+                            //color: 'rgb(101,9,21)'
+                            color: 'rgb(19,14,31)',
+                        }
+                    ])
+                },
+            },
         ]
     };
 
@@ -311,11 +457,16 @@ async function chartPrevotes() {
             document.getElementById('timeScale').value = "0"
             option.xAxis.type = 'value'
             initialVotes = []
+            highlightVotes = []
+            searchVotes = []
             await getState()
             option.series[0].data = initialVotes
+            option.series[1].data = highlightVotes
+            option.series[2].data = searchVotes
             myChart.setOption(option)
             document.getElementById('blocknum').innerText = initialState.round.height
             document.getElementById('proposer').innerText = initialState.round.proposer
+            currentProposer = initialState.round.proposer
             pctOption.series[0].data = [ initialState.progress.pct ]
             pctChart.setOption(pctOption)
             if (lastHash === hash) {
@@ -340,19 +491,28 @@ async function chartPrevotes() {
             }
             if (updVote.type === "round"){
                 waitForRound = false
+                currentProposer = updVote.proposer
                 currentRound = updVote.height
                 initialVotes = []
+                highlightVotes = []
+                searchVotes = []
                 dedup = {}
                 option.series[0].data = initialVotes
+                option.series[1].data = highlightVotes
+                option.series[2].data = searchVotes
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
             } else if (updVote.type === "new_proposer") {
+                currentProposer = updVote.proposer
                 document.getElementById('proposer').innerText = updVote.proposer
-            //} else if (updVote.type === "final" && updVote.height >= currentRound) {
-            } else if (updVote.type === "final") {
+            } else if (updVote.type === "final" && updVote.height >= currentRound) {
+            //} else if (updVote.type === "final") {
                 waitForRound = false
                 initialVotes = []
+                highlightVotes = []
+                searchVotes = []
+                currentProposer = updVote.proposer
                 for (const v of updVote.Votes) {
                     if (v.offset_ms < -1000) {
                         continue
@@ -361,9 +521,17 @@ async function chartPrevotes() {
                     if (size < 15) {
                         size = 15
                     }
-                    initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+                    if (v.moniker === currentProposer) {
+                        highlightVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+                    } else if (v.moniker.includes(searchFor)) {
+                        searchVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+                    } else {
+                        initialVotes.push([v.offset_ms, v.weight, size, v.moniker, "votes"])
+                    }
                 }
                 option.series[0].data = initialVotes
+                option.series[1].data = highlightVotes
+                option.series[2].data = searchVotes
                 myChart.setOption(option)
                 document.getElementById('blocknum').innerText = updVote.height
                 document.getElementById('proposer').innerText = updVote.proposer
@@ -414,6 +582,8 @@ async function chartPrevotes() {
         if (lastSize !== initialVotes.length && skipUpdate === false) {
             lastSize = initialVotes.length
             option.series[0].data = initialVotes
+            option.series[1].data = highlightVotes
+            option.series[2].data = searchVotes
             myChart.setOption(option)
         }
     }
@@ -437,11 +607,28 @@ async function chartPrevotes() {
                     if (updVote.height > height) {
                         height = updVote.height
                         initialVotes = []
-                        initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        highlightVotes = []
+                        searchVotes = []
+                        if (updVote.proposer) {
+                            highlightVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        } else if (updVote.moniker.includes(searchFor)) {
+                            console.log("match!")
+                            searchVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        } else {
+                            initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        }
                         option.series[0].data = initialVotes
+                        option.series[1].data = highlightVotes
+                        option.series[2].data = searchVotes
                         myChart.setOption(option)
                     } else {
-                        initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        if (updVote.proposer) {
+                            highlightVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        } else if (updVote.moniker.includes(searchFor)) {
+                            searchVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        } else {
+                            initialVotes.push([updVote.offset_ms, updVote.weight, size, updVote.moniker, "votes"])
+                        }
                     }
                 }
             }

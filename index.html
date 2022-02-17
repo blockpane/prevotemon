@@ -29,7 +29,7 @@
       <div class="row">
         <div class="col-3">
           <div class="row">
-            <div class="col text-lg-center h5">Prevotes</div>
+            <div class="col text-lg-center h5" id="chainid">Prevotes</div>
             <div class="col text-start">
               <div class="row">
               </div>
@@ -43,7 +43,8 @@
                   <div class="form-check form-switch" hidden>
                     <input class="form-check-input bg-light btn-outline-warning" onchange="unselect()" type="checkbox" role="switch" id="pauseSwitch">
                     <label class="form-check-label" for="pauseSwitch">Pause</label>
-                </div>
+                </div>&nbsp;
+                <input type="text" style="padding-top: 10px;" class="form-control bg-light btn-outline-warning text-white" placeholder="Highlight Validator" id="searchFor" onchange="setSearch()" onkeyup="setSearch()" />
               </div>
             </div>
           </div>

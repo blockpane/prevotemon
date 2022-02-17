@@ -64,6 +64,8 @@ func main() {
 			writer.Header().Set("Content-Type", "application/json")
 			j, _ := json.Marshal(pvm.State)
 			_, _ = writer.Write(j)
+		case "/chainid":
+			_, _ = writer.Write([]byte(fmt.Sprintf(`{"chain_id": "%s"}`,pvm.ChainID)))
 		case "/history":
 			writer.Header().Set("Content-Type", "application/json")
 			keys, ok := request.URL.Query()["height"]
