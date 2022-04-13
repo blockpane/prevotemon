@@ -591,7 +591,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	for {
 		select {
 		case v := <-votes:
-			if len(currentVals) == 0 || int32(len(currentVals)) < v.Index || State.Round == nil {
+			if len(currentVals) == 0 || int32(len(currentVals)) <= v.Index || State.Round == nil {
 				continue
 			}
 			newVote := &PreVoteMsg{
