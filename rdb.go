@@ -26,60 +26,61 @@ func BlockNotFound(height string) []byte {
 
 func redisWorker(ctx context.Context, save chan *redisMsg) {
 
-	// background worker to cleanup old redis records:
-	go func() {
-		tick := time.NewTicker(10 * time.Minute)
-		for {
-			select {
-			case <-tick.C:
-				//if Cache.Highest == 0 {
-				//	continue
-				//}
-				log.Println("cleaning old records from db")
-				rdb, err := getRedisClient()
-				if err != nil {
-					log.Println("could not clean historic redis records", err)
-					continue
-				}
-				timeout, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-				keys, err := rdb.Keys(timeout, "*").Result()
-				cancel()
-				if err != nil {
-					log.Println("could not clean historic redis records", err)
-					continue
-				}
-				var highest int
-				index := make([]int, 0)
-				for _, k := range keys {
-					i, e := strconv.Atoi(k)
-					if e != nil {
-						continue
-					}
-					index = append(index, i)
-					if i < highest {
-						highest = i
-					}
-					keys = make([]string, 0)
-					for _, key := range index {
-						if key < highest-maxRecords {
-							s := strconv.Itoa(key)
-							if s != "" {
-								keys = append(keys, s)
-							}
-						}
-					}
-					if len(keys) > 0 {
-						if failed := rdb.Del(ctx, keys...).Err(); failed != nil {
-							log.Println("could not delete old keys", failed)
-						}
-					}
-					log.Printf("done cleaning records, removed %d keys", len(keys))
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	// FIXME: this is completely broken.
+	// // background worker to cleanup old redis records:
+	// go func() {
+	// 	tick := time.NewTicker(10 * time.Minute)
+	// 	for {
+	// 		select {
+	// 		case <-tick.C:
+	// 			//if Cache.Highest == 0 {
+	// 			//	continue
+	// 			//}
+	// 			log.Println("cleaning old records from db")
+	// 			rdb, err := getRedisClient()
+	// 			if err != nil {
+	// 				log.Println("could not clean historic redis records", err)
+	// 				continue
+	// 			}
+	// 			timeout, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	// 			keys, err := rdb.Keys(timeout, "*").Result()
+	// 			cancel()
+	// 			if err != nil {
+	// 				log.Println("could not clean historic redis records", err)
+	// 				continue
+	// 			}
+	// 			var highest int
+	// 			index := make([]int, 0)
+	// 			for _, k := range keys {
+	// 				i, e := strconv.Atoi(k)
+	// 				if e != nil {
+	// 					continue
+	// 				}
+	// 				index = append(index, i)
+	// 				if i < highest {
+	// 					highest = i
+	// 				}
+	// 				keys = make([]string, 0)
+	// 				for _, key := range index {
+	// 					if key < highest-maxRecords {
+	// 						s := strconv.Itoa(key)
+	// 						if s != "" {
+	// 							keys = append(keys, s)
+	// 						}
+	// 					}
+	// 				}
+	// 				if len(keys) > 0 {
+	// 					if failed := rdb.Del(ctx, keys...).Err(); failed != nil {
+	// 						log.Println("could not delete old keys", failed)
+	// 					}
+	// 				}
+	// 				log.Printf("done cleaning records, removed %d keys", len(keys))
+	// 			}
+	// 		case <-ctx.Done():
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
 	for {
 		select {
@@ -132,7 +133,7 @@ func saveRecord(height int64, record []byte, slow bool) error {
 	if slow {
 		err = rdb.Set(ctx, fmt.Sprintf("slow-%d", height), record, 0).Err()
 	}
-	return rdb.Set(ctx, fmt.Sprintf("%d", height), record, 0).Err()
+	return rdb.Set(ctx, fmt.Sprintf("%d", height), record, expire).Err()
 }
 
 func FetchRecord(height int64) ([]byte, error) {
