@@ -18,7 +18,7 @@ type redisMsg struct {
 	slow   bool
 }
 
-const maxRecords = 500_000 // 500k is probably around 16MiB of RAM.
+const maxRecords = 100_000 // 100k is probably around 2-3GB of RAM.
 func BlockNotFound(height string) []byte {
 	h, _ := strconv.Atoi(height)
 	return []byte(fmt.Sprintf(`{"round":{"height":"%d","proposer":"Block Not Found","type":"round"},"progress":{"type":"pct","pct":0},"pre_votes":[]}`, h))
