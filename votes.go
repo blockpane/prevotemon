@@ -499,7 +499,11 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 						slow:   false, // TODO: figure out if block was slow!
 					}
 				}
-				previousProposer = currentVals[currentRound.Index].Moniker
+				if int32(len(currentVals)) >= currentRound.Index {
+					log.Println("previous proposer value was invalid")
+				} else {
+					previousProposer = currentVals[currentRound.Index].Moniker
+				}
 				for currentRound.Height != stateHeight {
 					time.Sleep(10 * time.Millisecond)
 				}
