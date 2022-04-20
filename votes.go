@@ -117,7 +117,7 @@ var lastTS = time.Now().UTC()
 var nextTS = time.Now().UTC()
 var stateHeight int64
 
-func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, round chan *NewRound) {
+func Votes(ctx context.Context, cancel context.CancelFunc, client *rpchttp.HTTP, state chan *VoteState, round chan *NewRound) {
 	tick := time.NewTicker(250 * time.Millisecond)
 	var previousHeight int64
 	var sendNewRound bool
@@ -133,21 +133,24 @@ func Votes(ctx context.Context, client *rpchttp.HTTP, state chan *VoteState, rou
 				defer func() {
 					busy = false
 				}()
-				timeout, cnl := context.WithTimeout(context.Background(), 5*time.Second)
+				timeout, cnl := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cnl()
 				resp, err := client.ConsensusState(timeout)
 				if err != nil {
 					log.Println(err)
+					cancel()
 					return
 				}
 				roundState := &simple{}
 				err = json.Unmarshal(resp.RoundState, roundState)
 				if err != nil {
 					log.Println(err)
+					cancel()
 					return
 				}
 				votes, _ := roundState.prevotes()
 				if votes == nil {
+					cancel()
 					return
 				}
 				stateHeight = roundState.height()
@@ -397,6 +400,8 @@ type ProgressMsg struct {
 }
 
 type CurrentState struct {
+	sync.Mutex
+
 	Round    *NewRoundMsg  `json:"round"`
 	PreVotes []*PreVoteMsg `json:"pre_votes"`
 	Progress *ProgressMsg  `json:"progress"`
@@ -460,6 +465,24 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 	pctUpdate := make(chan float64, 200)
 	persistChan := make(chan *redisMsg, 1)
 
+	updateFinalPct := func() {
+		State.Lock()
+		defer State.Unlock()
+		h := stateHeight - 1
+		b, e := client.Block(abort, &h)
+		if e != nil {
+			log.Println(e)
+			return
+		}
+		var totalPower float64 = 1
+		for index, signature := range b.Block.LastCommit.Signatures {
+			if signature.Absent() {
+				totalPower -= currentVals[index].Weight
+			}
+		}
+		State.Progress.Pct = (math.Round(10000 * totalPower)) / 100
+	}
+
 	go func() {
 		for {
 			select {
@@ -491,12 +514,15 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 						rounds <- j
 					}
 				}
-				j, e := json.Marshal(State)
-				if e == nil && State.Round != nil && State.Progress != nil && State.PreVotes != nil {
-					persistChan <- &redisMsg{
-						height: currentRound.Height - 1,
-						record: j,
-						slow:   false, // TODO: figure out if block was slow!
+				if State.Round != nil && State.Progress != nil && State.PreVotes != nil {
+					updateFinalPct()
+					j, e := json.Marshal(State)
+					if e == nil {
+						persistChan <- &redisMsg{
+							height: currentRound.Height - 1,
+							record: j,
+							slow:   false, // TODO: figure out if block was slow!
+						}
 					}
 				}
 				if int32(len(currentVals)) <= currentRound.Index {
@@ -507,6 +533,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				}
 				for currentRound.Height != stateHeight {
 					time.Sleep(10 * time.Millisecond)
+
 				}
 				lastTS = nextTS
 				pctUpdate <- 0.0
@@ -571,7 +598,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				last = p
 				State.Progress = &ProgressMsg{
 					Type:      "pct",
-					Pct:       math.Round(p*100) / 100,
+					Pct:       math.Round(p*1000) / 1000,
 					TimeStamp: time.Now().UTC().Unix(),
 				}
 				if pJson, e := json.Marshal(State.Progress); e == nil {
@@ -585,7 +612,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 
 	votes := make(chan *VoteState, 1)
 	go func() {
-		Votes(abort, client, votes, newRound)
+		Votes(abort, cancel, client, votes, newRound)
 		cancel()
 	}()
 	go func() {
@@ -608,7 +635,9 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 				Height:   v.Height,
 				Proposer: currentVals[int(v.Index)].Moniker == State.Round.Proposer,
 			}
+			State.Lock()
 			State.PreVotes = append(State.PreVotes, newVote)
+			State.Unlock()
 			j, e := json.Marshal(newVote)
 			if e != nil {
 				log.Println(e)
