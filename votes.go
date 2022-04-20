@@ -476,7 +476,7 @@ func WatchPrevotes(rpc, rest string, rounds, updates, progress chan []byte) {
 		}
 		var totalPower float64 = 1
 		for index, signature := range b.Block.LastCommit.Signatures {
-			if signature.Absent() {
+			if signature.Absent() && index < len(currentVals) {
 				totalPower -= currentVals[index].Weight
 			}
 		}
